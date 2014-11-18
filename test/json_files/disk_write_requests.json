@@ -1,0 +1,42 @@
+{
+    "id": "garlic",
+    "name": "disk.write.requests",
+    "project_id": "magic",
+    "resource_id": "magic",
+    "resource_metadata": {
+        "disk_gb": 1,
+        "display_name": "cathartic",
+        "ephemeral_gb": 0,
+        "flavor": {
+            "disk": 1,
+            "ephemeral": 0,
+            "id": "1",
+            "links": [
+                {
+                    "href": "magic.com",
+                    "rel": "bookmark"
+                }
+            ],
+            "name": "m1.tiny",
+            "ram": 512,
+            "vcpus": 1
+        },
+        "host": "tragic",
+        "image": null,
+        "image_ref": null,
+        "image_ref_url": null,
+        "instance_type": "1",
+        "kernel_id": null,
+        "memory_mb": 512,
+        "name": "attic",
+        "ramdisk_id": null,
+        "root_gb": 1,
+        "vcpus": 1
+    },
+    "source": "openstack",
+    "timestamp": "2014-10-03T00:26:24Z",
+    "type": "cumulative",
+    "unit": "request",
+    "user_id": "magic",
+    "volume": 3624
+}

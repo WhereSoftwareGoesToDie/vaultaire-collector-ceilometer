@@ -1,0 +1,24 @@
+{
+    "id": "garlic",
+    "name": "ip.floating",
+    "project_id": "magic",
+    "resource_id": "magic",
+    "resource_metadata": {
+        "event_type": "floatingip.create.end",
+        "fixed_ip_address": null,
+        "floating_ip_address": "123.123.123.123",
+        "floating_network_id": "tumeric",
+        "host": "tragic",
+        "id": "garlic",
+        "port_id": null,
+        "router_id": null,
+        "status": "DOWN",
+        "tenant_id": "magic"
+    },
+    "source": "openstack",
+    "timestamp": "2014-09-22 07:35:03.030569",
+    "type": "gauge",
+    "unit": "ip",
+    "user_id": "magic",
+    "volume": 1
+}

@@ -1,0 +1,20 @@
+{
+    "id": "garlic",
+    "name": "network.outgoing.bytes",
+    "project_id": "magic",
+    "resource_id": "magic",
+    "resource_metadata": {
+        "fref": null,
+        "instance_id": "magic",
+        "instance_type": "2",
+        "mac": "aa:bb:cc:dd:ee:ff",
+        "name": "attic",
+        "parameters": {}
+    },
+    "source": "openstack",
+    "timestamp": "2014-10-03T00:25:32Z",
+    "type": "cumulative",
+    "unit": "B",
+    "user_id": "magic",
+    "volume": 21816
+}
