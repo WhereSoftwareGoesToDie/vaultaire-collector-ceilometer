@@ -24,7 +24,7 @@ git clone https://github.com/anchor/vaultaire-collector-common.git ../vaultaire-
 git clone https://github.com/anchor/vaultaire-common.git ../vaultaire-common/
 git clone https://github.com/anchor/marquise.git ../marquise/
 
-git archive --prefix=ceilometer-publisher-vaultaire-${VERSION}/ -o ../ceilometer-publisher-vaultaire-${VERSION}.tar.gz HEAD
+git archive --prefix=vaultaire-collector-ceilometer-${VERSION}/ -o ../vaultaire-collector-ceilometer-${VERSION}.tar.gz HEAD
 
 cd ../vaultaire-collector-common
 git archive --prefix=vaultaire-collector-common/ -o ../vaultaire-collector-common.tar.gz master
@@ -35,7 +35,7 @@ git archive --prefix=vaultaire-common/ -o ../vaultaire-common.tar.gz master
 cd ../marquise
 git archive --prefix=marquise/ -o ../marquise.tar.gz master
 
-cd ../ceilometer-publisher-vaultaire
+cd ../vaultaire-collector-ceilometer
 
 mkdir $HOME/rpmbuild/SOURCES/ -p
 mv ../*.tar.gz $HOME/rpmbuild/SOURCES/
@@ -46,7 +46,7 @@ rpmdev-setuptree
 
 echo '%debug_package %{nil}' > $HOME/.rpmmacros
 rpmbuild -bb --define "build_number $BUILDNO" --define "dist .el7" \
-        $ROOT/pkg/centos/ceilometer-publisher-vaultaire.spec
+        $ROOT/pkg/centos/vaultaire-collector-ceilometer.spec
 
 mkdir packages
 
