@@ -121,19 +121,47 @@ processSample bs = do
             liftIO $ alertM "Ceilometer.Process.processSample" $
                 "Failed to parse: " <> L.unpack bs <> " Error: " <> e
             return []
-        Right m@Metric{..} -> case (metricName, isEvent m) of
-            ("instance", False) -> processInstance m
-            ("cpu", False) -> processBasePollster m
-            ("disk.write.bytes", False) -> processBasePollster m
-            ("disk.read.bytes", False) -> processBasePollster m
-            ("network.incoming.bytes", False) -> processBasePollster m
-            ("network.outgoing.bytes", False) -> processBasePollster m
-            ("ip.floating", True) -> processIpEvent m
-            ("volume.size", True) -> processVolumeEvent m
-            (x, y) -> do
-                liftIO $ infoM "Ceilometer.Process.processSample" $
-                    "Unsupported metric: " <> show x <> " event: " <> show y
-                return []
+        Right m -> process m
+
+process :: Metric -> PublicationData
+process m = process' (metricName m) (isEvent m)
+  where
+    -- Supported metrics
+    process' "instance"                   False = processInstance m
+    process' "cpu"                        False = processBasePollster m
+    process' "disk.write.bytes"           False = processBasePollster m
+    process' "disk.read.bytes"            False = processBasePollster m
+    process' "network.incoming.bytes"     False = processBasePollster m
+    process' "network.outgoing.bytes"     False = processBasePollster m
+    process' "ip.floating"                True  = processIpEvent m
+    process' "volume.size"                True  = processVolumeEvent m
+    process' "image.size"                 False = processImage m
+
+    -- Ignored metrics
+    process' x@"instance"               y@True  = ignore x y
+    process' x@"cpu"                    y@True  = ignore x y
+    process' x@"disk.write.bytes"       y@True  = ignore x y
+    process' x@"disk.read.bytes"        y@True  = ignore x y
+    process' x@"network.incoming.bytes" y@True  = ignore x y
+    process' x@"network.outgoing.bytes" y@True  = ignore x y
+    process' x@"ip.floating"            y@False = ignore x y
+    process' x@"volume.size"            y@False = ignore x y
+    process' x@"image.size"             y@True  = ignore x y
+    process' x@"volume"                 y       = ignore x y
+    process' x@"vcpus"                  y       = ignore x y
+    process' x@"memory"                 y       = ignore x y
+    process' x y
+        | "instance" `T.isPrefixOf` x = ignore x y
+        | "disk"     `T.isPrefixOf` x = ignore x y
+        | otherwise = alert x y
+    ignore x y = do
+        liftIO $ infoM "Ceilometer.Process.processSample" $
+            "Ignored metric: " <> show x <> " event: " <> show y
+        return []
+    alert x y = do
+        liftIO $ alertM "Ceilometer.Process.processSample" $
+            "Unexpected metric: " <> show x <> " event: " <> show y
+        return []
 
 -- Utility
 
@@ -241,6 +269,10 @@ processInstance m@Metric{..} = do
             "Failure to convert all sourceMaps to SourceDicts for instance pollster"
         return []
 
+-- TODO: Implement
+processImage :: Metric -> PublicationData
+processImage m = return []
+
 -- Event based metrics
 
 processVolumeEvent :: Metric -> PublicationData
@@ -300,7 +332,7 @@ getVolumePayload m@Metric{..} = do
     else
         Just $ constructCompoundPayload statusValue verbValue endpointValue metricPayload
 
--- | An allocation has no 'value' per se, so we arbitarily use 1 
+-- | An allocation has no 'value' per se, so we arbitarily use 1
 ipRawPayload :: Word64
 ipRawPayload = 1
 
