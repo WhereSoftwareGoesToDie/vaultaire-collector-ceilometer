@@ -42,6 +42,10 @@ cabal sandbox add-source ../vaultaire-common
 cabal sandbox add-source ../marquise
 cabal sandbox add-source ../vaultaire-collector-common
 cabal install --only-dependencies
+cabal install HUnit
+cabal install hspec
+cabal configure --enable-tests
+cabal test
 cabal build
 
 %install
@@ -54,6 +58,9 @@ cp -v dist/build/vaultaire-collector-ceilometer/vaultaire-collector-ceilometer %
 %{_bindir}/vaultaire-collector-ceilometer
 
 %changelog
+* Tue Nov 19 2014 Oswyn Brent <oswyn.brent@anchor.com.au> - 0.1.0-0.0anchor2
+- rebuild with tests
+
 * Tue Nov 18 2014 Oswyn Brent <oswyn.brent@anchor.com.au> - 0.1.0-0.0anchor1
 - initial build
 
