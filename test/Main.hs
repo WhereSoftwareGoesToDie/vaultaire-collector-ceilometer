@@ -27,7 +27,7 @@ import           Ceilometer.Types
 
 -- Convenience run function
 runTestPublisher :: Publisher a -> IO a
-runTestPublisher = runCollector (pure $ CeilometerOptions "" "" "" True True "" 0 "") (\_ -> return $ CeilometerState undefined undefined) (return ())
+runTestPublisher = runNullCollector (pure $ CeilometerOptions "" "" "" True True "" 0 "") (\_ -> return $ CeilometerState undefined undefined) (return ())
 
 -- Volume Events
 

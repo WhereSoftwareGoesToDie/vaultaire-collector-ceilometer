@@ -32,7 +32,7 @@ library
                      time,
                      old-locale,
                      mtl,
-                     vaultaire-collector-common >= 0.2.0,
+                     vaultaire-collector-common >= 0.3.0,
                      vaultaire-common
 
   ghc-options:       -O2
