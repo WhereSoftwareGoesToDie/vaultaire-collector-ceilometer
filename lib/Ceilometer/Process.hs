@@ -96,7 +96,6 @@ runPublisher = runCollector parseOptions initState cleanup publishSamples
         (_, CeilometerOptions{..}) <- ask
         (_, CeilometerState{..}) <- get
         forever $ do
-            liftIO $ infoM "Ceilometer.Process.publishSamples" "Waiting for message"
             msg <- liftIO $ getMsg ceilometerMessageChan Ack rabbitQueue
             case msg of
                 Nothing          -> liftIO $ do
@@ -104,7 +103,6 @@ runPublisher = runCollector parseOptions initState cleanup publishSamples
                         "No message received, sleeping for " <> show rabbitPollPeriod <> " us"
                     threadDelay rabbitPollPeriod
                 Just (msg', env) -> do
-                    liftIO $ infoM "Ceilometer.Process.publishSamples" "received message"
                     tuples <- processSample $ msgBody msg'
                     forM_ tuples (\(addr, sd, ts, p) -> do
                         collectSource addr sd
@@ -114,8 +112,7 @@ runPublisher = runCollector parseOptions initState cleanup publishSamples
 -- | Takes in a JSON Object and processes it into a list of
 --   (Address, SourceDict, TimeStamp, Payload) tuples
 processSample :: L.ByteString -> PublicationData
-processSample bs = do
-    liftIO $ infoM "Ceilometer.Process.processSample" "decoding message"
+processSample bs =
     case eitherDecode bs of
         Left e             -> do
             liftIO $ alertM "Ceilometer.Process.processSample" $
