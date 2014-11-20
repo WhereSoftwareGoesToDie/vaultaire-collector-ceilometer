@@ -147,12 +147,14 @@ process m = process' (metricName m) (isEvent m)
     process' x@"ip.floating"            y@False = ignore x y
     process' x@"volume.size"            y@False = ignore x y
     process' x@"image.size"             y@True  = ignore x y
+    process' x@"image"                  y       = ignore x y
     process' x@"volume"                 y       = ignore x y
     process' x@"vcpus"                  y       = ignore x y
     process' x@"memory"                 y       = ignore x y
     process' x y
         | "instance" `T.isPrefixOf` x = ignore x y
         | "disk"     `T.isPrefixOf` x = ignore x y
+        | "network"  `T.isPrefixOf` x = ignore x y
         | otherwise = alert x y
     ignore x y = do
         liftIO $ infoM "Ceilometer.Process.processSample" $
