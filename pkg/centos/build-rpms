@@ -1,0 +1,53 @@
+#!/bin/bash
+set -eux
+
+export LANG=en_US.UTF-8
+
+MAJOR=$1
+MINOR=$2
+PATCH=$3
+BUILDNO=$4
+VERSION="${MAJOR}.${MINOR}.${PATCH}"
+ROOT=$(realpath $(pwd))
+
+echo
+echo "BUILDING VERSION ${VERSION} - ${BUILDNO}"
+echo
+
+# Pre
+
+sudo yum update -y
+sudo yum install -y zeromq-devel
+sudo yum install -y zlib-devel
+
+git clone https://github.com/anchor/vaultaire-collector-common.git ../vaultaire-collector-common/
+git clone https://github.com/anchor/vaultaire-common.git ../vaultaire-common/
+git clone https://github.com/anchor/marquise.git ../marquise/
+
+git archive --prefix=vaultaire-collector-ceilometer-${VERSION}/ -o ../vaultaire-collector-ceilometer-${VERSION}.tar.gz HEAD
+
+cd ../vaultaire-collector-common
+git archive --prefix=vaultaire-collector-common/ -o ../vaultaire-collector-common.tar.gz master
+
+cd ../vaultaire-common
+git archive --prefix=vaultaire-common/ -o ../vaultaire-common.tar.gz master
+
+cd ../marquise
+git archive --prefix=marquise/ -o ../marquise.tar.gz master
+
+cd ../vaultaire-collector-ceilometer
+
+mkdir $HOME/rpmbuild/SOURCES/ -p
+mv ../*.tar.gz $HOME/rpmbuild/SOURCES/
+
+rpmdev-setuptree
+
+# Make rpmbuild stop with the debuginfo packages.
+
+echo '%debug_package %{nil}' > $HOME/.rpmmacros
+rpmbuild -bb --define "build_number $BUILDNO" --define "dist .el7" \
+        $ROOT/pkg/centos/vaultaire-collector-ceilometer.spec
+
+mkdir packages
+
+cp $HOME/rpmbuild/RPMS/x86_64/*.rpm packages/

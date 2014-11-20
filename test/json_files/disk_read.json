@@ -1,0 +1,42 @@
+{
+    "id": "garlic",
+    "name": "disk.read.bytes",
+    "project_id": "magic",
+    "resource_id": "magic",
+    "resource_metadata": {
+        "disk_gb": 20,
+        "display_name": "cathartic",
+        "ephemeral_gb": 0,
+        "flavor": {
+            "disk": 20,
+            "ephemeral": 0,
+            "id": "2",
+            "links": [
+                {
+                    "href": "magic.com",
+                    "rel": "bookmark"
+                }
+            ],
+            "name": "m1.small",
+            "ram": 2048,
+            "vcpus": 1
+        },
+        "host": "tragic",
+        "image": null,
+        "image_ref": null,
+        "image_ref_url": null,
+        "instance_type": "2",
+        "kernel_id": null,
+        "memory_mb": 2048,
+        "name": "attic",
+        "ramdisk_id": null,
+        "root_gb": 20,
+        "vcpus": 1
+    },
+    "source": "openstack",
+    "timestamp": "2014-10-03T00:26:00Z",
+    "type": "cumulative",
+    "unit": "B",
+    "user_id": "magic",
+    "volume": 117644800
+}

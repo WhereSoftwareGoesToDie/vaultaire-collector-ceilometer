@@ -1,0 +1,26 @@
+{
+    "id": "garlic",
+    "name": "volume.size",
+    "project_id": "magic",
+    "resource_id": "magic",
+    "resource_metadata": {
+        "created_at": "2014-09-22 07:31:41",
+        "display_name": "cathartic",
+        "event_type": "volume.create.start",
+        "host": "tragic",
+        "launched_at": "",
+        "size": 10,
+        "snapshot_id": "magic",
+        "status": "creating",
+        "tenant_id": "magic",
+        "user_id": "magic",
+        "volume_id": "magic",
+        "volume_type": "lethargic"
+    },
+    "source": "openstack",
+    "timestamp": "2014-09-22 07:31:41.378773",
+    "type": "gauge",
+    "unit": "GB",
+    "user_id": "magic",
+    "volume": 10
+}
