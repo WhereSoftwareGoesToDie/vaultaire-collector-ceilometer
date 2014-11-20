@@ -74,7 +74,7 @@ runPublisher = runCollector parseOptions initState cleanup publishSamples
         <*> option auto
             (long "poll-period"
              <> short 'p'
-             <> value 1000000
+             <> value 5000000
              <> metavar "POLL-PERIOD"
              <> help "Time to wait (in microseconds) before re-querying empty queue.")
         <*> strOption
