@@ -112,46 +112,59 @@ runPublisher = runCollectorN parseOptions initState cleanup publishSamples
 -- | Takes in a JSON Object and processes it into a list of
 --   (Address, SourceDict, TimeStamp, Payload) tuples
 processSample :: L.ByteString -> PublicationData
-processSample bs =
+processSample bs = do
     case eitherDecode bs of
         Left e             -> do
             liftIO $ alertM "Ceilometer.Process.processSample" $
                 "Failed to parse: " <> L.unpack bs <> " Error: " <> e
             return []
-        Right m -> process m
+        Right m -> do
+            when ("magic" `S.isInfixOf` mconcat (L.toChunks bs)) (liftIO $ print bs)
+            process m
 
 process :: Metric -> PublicationData
-process m = process' (metricName m) (isEvent m)
+process m = let n = metricName m in do
+    liftIO $ print n
+    process' n (isEvent m)
   where
-    -- Supported metrics
+-- Supported metrics
     process' "instance"                   False = processInstance m
     process' "cpu"                        False = processBasePollster m
     process' "disk.write.bytes"           False = processBasePollster m
+    process' "disk.device.write.bytes"    False = processBasePollster m
     process' "disk.read.bytes"            False = processBasePollster m
+    process' "disk.device.read.bytes"     False = processBasePollster m
     process' "network.incoming.bytes"     False = processBasePollster m
     process' "network.outgoing.bytes"     False = processBasePollster m
-    process' "ip.floating"                True  = processIpEvent m
+--    process' "ip.floating"                True  = processIpEvent m
     process' "volume.size"                True  = processVolumeEvent m
     process' "image.size"                 False = processImage m
-
+    process' "image.download"             True  = processImageDownload m
+    process' "image.serve"                True  = processImageServe m
     -- Ignored metrics
     process' x@"instance"               y@True  = ignore x y
-    process' x@"cpu"                    y@True  = ignore x y
-    process' x@"disk.write.bytes"       y@True  = ignore x y
-    process' x@"disk.read.bytes"        y@True  = ignore x y
-    process' x@"network.incoming.bytes" y@True  = ignore x y
-    process' x@"network.outgoing.bytes" y@True  = ignore x y
-    process' x@"ip.floating"            y@False = ignore x y
-    process' x@"volume.size"            y@False = ignore x y
-    process' x@"image.size"             y@True  = ignore x y
-    process' x@"image"                  y       = ignore x y
-    process' x@"volume"                 y       = ignore x y
-    process' x@"vcpus"                  y       = ignore x y
-    process' x@"memory"                 y       = ignore x y
+--    process' x@"cpu"                    y@True  = ignore x y
+--    process' x@"disk.write.bytes"       y@True  = ignore x y
+--    process' x@"disk.read.bytes"        y@True  = ignore x y
+    process' x@"disk.write.requests"        y       = ignore x y
+    process' x@"disk.read.requests"         y       = ignore x y
+    process' x@"disk.device.write.requests" y       = ignore x y
+    process' x@"disk.device.read.requests"  y       = ignore x y
+    process' x@"disk.ephemeral.size"        y@True  = ignore x y
+    process' x@"disk.root.size"             y@True  = ignore x y
+    process' x@"network.incoming.packets"   y       = ignore x y
+    process' x@"network.outgoing.packets"   y       = ignore x y
+--    process' x@"network.incoming.bytes" y@True  = ignore x y
+--    process' x@"network.outgoing.bytes" y@True  = ignore x y
+--    process' x@"ip.floating"            y@False = ignore x y
+--    process' x@"volume.size"            y@False = ignore x y
+--    process' x@"image.size"             y@True  = ignore x y
+    process' x@"image"                      y       = ignore x y
+    process' x@"volume"                     y       = ignore x y
+    process' x@"vcpus"                      y       = ignore x y
+    process' x@"memory"                     y       = ignore x y
     process' x y
-        | "instance" `T.isPrefixOf` x = ignore x y
-        | "disk"     `T.isPrefixOf` x = ignore x y
-        | "network"  `T.isPrefixOf` x = ignore x y
+        | "instance:" `T.isPrefixOf` x = ignore x y
         | otherwise = alert x y
     ignore x y = do
         liftIO $ infoM "Ceilometer.Process.processSample" $
@@ -159,7 +172,8 @@ process m = process' (metricName m) (isEvent m)
         return []
     alert x y = do
         liftIO $ alertM "Ceilometer.Process.processSample" $
-            "Unexpected metric: " <> show x <> " event: " <> show y
+            "Unexpected metric: " <> show x <> " event: " <> show y <>
+            "\n" <> show m
         return []
 
 -- Utility
@@ -272,6 +286,14 @@ processInstance m@Metric{..} = do
 processImage :: Metric -> PublicationData
 processImage m = return []
 
+-- TODO: Implement
+processImageDownload :: Metric -> PublicationData
+processImageDownload m = return []
+
+-- TODO: Implement
+processImageServe :: Metric -> PublicationData
+processImageServe m = return []
+
 -- Event based metrics
 
 processVolumeEvent :: Metric -> PublicationData
@@ -301,6 +323,7 @@ getVolumePayload m@Metric{..} = do
         "creating"  -> return 2
         "extending" -> return 3
         "deleting"  -> return 4
+        "error"     -> return 5
         x           -> do
             alertM "Ceilometer.Process.getVolumePayload" $
                 "Invalid status for volume event: " <> show x
