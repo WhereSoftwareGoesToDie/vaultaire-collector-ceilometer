@@ -1,5 +1,5 @@
 name:                vaultaire-collector-ceilometer
-version:             0.2.0
+version:             0.3.0
 synopsis:            Vaultaire Collector for Ceilometer
 homepage:            https://github.com/anchor/vaultaire-collector-ceilometer
 license:             BSD3
@@ -81,7 +81,7 @@ test-suite           tests
                      unordered-containers,
                      vaultaire-collector-ceilometer,
                      vaultaire-common,
-                     vaultaire-collector-common,
+                     vaultaire-collector-common >= 0.3.0,
                      marquise >= 3.1.0
 
   ghc-options:       -threaded
