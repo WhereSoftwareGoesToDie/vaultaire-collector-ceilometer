@@ -1,5 +1,5 @@
 Name:       vaultaire-collector-ceilometer
-Version:    0.3.0
+Version:    0.2.0
 Release:    0.0anchor%{?build_number}%{!?build_number:1}%{?dist}
 Summary:    Vaultaire Publisher for Ceilometer
 
@@ -58,8 +58,8 @@ cp -v dist/build/vaultaire-collector-ceilometer/vaultaire-collector-ceilometer %
 %{_bindir}/vaultaire-collector-ceilometer
 
 %changelog
-* Tue Nov 25 2014 Oswyn Brent <oswyn.brent@anchor.com.au> - 0.3.0-0.0anchor1
-- Juno updates
+* Tue Nov 25 2014 Oswyn Brent <oswyn.brent@anchor.com.au> - 0.2.0-0.0anchor2
+- Rebuild with Juno updates
 
 * Thu Nov 20 2014 Oswyn Brent <oswyn.brent@anchor.com.au> - 0.2.0-0.0anchor1
 - Explicitly matches ignored metrics
