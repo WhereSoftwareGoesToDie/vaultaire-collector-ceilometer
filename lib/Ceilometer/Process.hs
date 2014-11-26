@@ -74,9 +74,9 @@ runPublisher = runCollectorN parseOptions initState cleanup publishSamples
         <*> option auto
             (long "poll-period"
              <> short 'p'
-             <> value 5000000
+             <> value 5
              <> metavar "POLL-PERIOD"
-             <> help "Time to wait (in microseconds) before re-querying empty queue.")
+             <> help "Time to wait (in seconds) before re-querying empty queue.")
         <*> strOption
             (long "password-file"
              <> short 'f'
@@ -100,8 +100,8 @@ runPublisher = runCollectorN parseOptions initState cleanup publishSamples
             case msg of
                 Nothing          -> liftIO $ do
                     infoM "Ceilometer.Process.publishSamples" $
-                        "No message received, sleeping for " <> show rabbitPollPeriod <> " us"
-                    threadDelay rabbitPollPeriod
+                        "No message received, sleeping for " <> show rabbitPollPeriod <> " s"
+                    threadDelay (1000000 * rabbitPollPeriod)
                 Just (msg', env) -> do
                     tuples <- processSample $ msgBody msg'
                     forM_ tuples (\(addr, sd, ts, p) -> do
@@ -121,8 +121,7 @@ processSample bs =
         Right m -> process m
 
 process :: Metric -> PublicationData
-process m = let n = metricName m in do
-    process' n (isEvent m)
+process m = process' (metricName m) (isEvent m)
   where
 -- Supported metrics
     -- We process both instance pollsters and events
