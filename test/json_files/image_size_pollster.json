@@ -1,0 +1,31 @@
+{
+    "id": "magic",
+    "name": "image.size",
+    "project_id": "magic",
+    "resource_id": "magic",
+    "resource_metadata": {
+        "checksum": "abab1212",
+        "container_format": "bare",
+        "created_at": "2006-05-04T03:02:01",
+        "deleted": false,
+        "deleted_at": null,
+        "disk_format": "raw",
+        "is_public": true,
+        "min_disk": 0,
+        "min_ram": 0,
+        "name": "magic-image",
+        "properties": {
+            "description": null
+        },
+        "protected": false,
+        "size": 1120272384,
+        "status": "active",
+        "updated_at": "2006-07-08T09:10:11"
+    },
+    "source": "far-far-away",
+    "timestamp": "1970-01-01T00:03:20Z",
+    "type": "gauge",
+    "unit": "B",
+    "user_id": null,
+    "volume": 1120272384
+}
