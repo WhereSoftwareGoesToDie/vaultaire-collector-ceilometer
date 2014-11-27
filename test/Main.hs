@@ -265,6 +265,51 @@ expectedCpuHashmap = H.fromList
 expectedCpuSd :: SourceDict
 expectedCpuSd = either error id (makeSourceDict expectedCpuHashmap)
 
+-- Images
+
+expectedImagePollsterPayload :: Word64
+expectedImagePollsterPayload = 1120272384
+
+expectedImagePollsterTimestamp :: TimeStamp
+expectedImagePollsterTimestamp = TimeStamp 200000000000
+
+expectedImagePollsterHashmap :: HashMap Text Text
+expectedImagePollsterHashmap = H.fromList
+  [ ("metric_name", "image.size"),
+    ("project_id", "magic"),
+    ("resource_id", "magic"),
+    ("metric_type", "gauge"),
+    ("metric_unit", "B"),
+    ("_compound", "0"),
+    ("_event", "0")
+  ]
+
+expectedImagePollsterSd :: SourceDict
+expectedImagePollsterSd = either error id (makeSourceDict expectedImagePollsterHashmap)
+
+-- Snapshots
+
+expectedSnapshotPayload :: Word64
+expectedSnapshotPayload = 1 + (1 `shift` 8) + (2 `shift` 16) + (40 `shift` 32)
+
+expectedSnapshotTimestamp :: TimeStamp
+expectedSnapshotTimestamp = TimeStamp 0
+
+expectedSnapshotHashmap :: HashMap Text Text
+expectedSnapshotHashmap = H.fromList
+  [ ("metric_name", "snapshot.size"),
+    ("project_id", "lethargic"),
+    ("resource_id", "harpic"),
+    ("display_name", "alice-in-wonderland"),
+    ("metric_type", "gauge"),
+    ("metric_unit", "GB"),
+    ("_compound", "1"),
+    ("_event", "1")
+  ]
+
+expectedSnapshotSd :: SourceDict
+expectedSnapshotSd = either error id (makeSourceDict expectedSnapshotHashmap)
+
 suite :: Spec
 suite = do
     describe "Processing Supported Metrics" $ do
@@ -274,6 +319,8 @@ suite = do
         it "Processes network rx/tx pollsters" testNetworkRxTx
         it "Processes disk read/write pollsters" testDiskReadWrite
         it "Processes cpu usage pollsters" testCpu
+        it "Processes image size pollsters" testImagePollster
+        it "Processes snapshot size events" testSnapshot
     describe "Ignoring Unsupported Metrics" $ do
         it "Ignores disk read/write requests pollsters" testIgnoreDiskRequests
         it "Ignores specifically sized instance pollsters" testIgnoreSizedInstances
@@ -389,6 +436,32 @@ testCpu = runTestPublisher $ do
         xs -> do
             let n = length xs
             assertFailure $ concat ["processedCpu has ", show n, " elements:, ", show xs, ". Expected 1"]
+
+testImagePollster :: IO ()
+testImagePollster = runTestPublisher $ do
+    rawJSON <- liftIO $ BSL.readFile "test/json_files/image_size_pollster.json"
+    processedImagePollster <- processSample rawJSON
+    liftIO $ case processedImagePollster of
+        [x@(_, sd, ts, p)] -> do
+            sd @?= expectedImagePollsterSd
+            ts @?= expectedImagePollsterTimestamp
+            p  @?= expectedImagePollsterPayload
+        xs -> do
+            let n = length xs
+            assertFailure $ concat ["processedImagePollster has ", show n, " elements:, ", show xs, ". Expected 1"]
+
+testSnapshot :: IO ()
+testSnapshot = runTestPublisher $ do
+    rawJSON <- liftIO $ BSL.readFile "test/json_files/snapshot_size.json"
+    processedSnapshot <- processSample rawJSON
+    liftIO $ case processedSnapshot of
+        [x@(_, sd, ts, p)] -> do
+            sd @?= expectedSnapshotSd
+            ts @?= expectedSnapshotTimestamp
+            p  @?= expectedSnapshotPayload
+        xs -> do
+            let n = length xs
+            assertFailure $ concat ["processedSnapshot has ", show n, " elements:, ", show xs, ". Expected 1"]
 
 testIgnoreDiskRequests :: IO ()
 testIgnoreDiskRequests = runTestPublisher $ do

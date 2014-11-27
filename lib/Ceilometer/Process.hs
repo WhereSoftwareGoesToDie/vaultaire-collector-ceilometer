@@ -217,9 +217,12 @@ getEventType m = case H.lookup "event_type" $ metricMetadata m of
 
 isCompound :: Metric -> Bool
 isCompound m
-    | isEvent m && metricName m == "ip.floating" = True
-    | isEvent m && metricName m == "volume.size" = True
-    | otherwise                                  = False
+    | isEvent m && metricName m == "ip.floating"   = True
+    | isEvent m && metricName m == "volume.size"   = True
+    | isEvent m && metricName m == "image.size"    = True
+    | isEvent m && metricName m == "snapshot.size" = True
+    | isEvent m && metricName m == "instance"      = True
+    | otherwise                                    = False
 
 -- | Constructs the internal HashMap of a SourceDict for the given Metric
 --   Appropriately excludes optional fields when not present
