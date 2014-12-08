@@ -1,0 +1,26 @@
+{
+    "id": "tyrannic",
+    "name": "snapshot.size",
+    "project_id": "lethargic",
+    "resource_id": "harpic",
+    "resource_metadata": {
+        "availability_zone": "wonderland",
+        "created_at": "1960-13-32 00:22:44",
+        "deleted": "",
+        "display_name": "alice-in-wonderland",
+        "event_type": "snapshot.create.end",
+        "host": "magic.place.thing",
+        "snapshot_id": "harpic",
+        "status": "available",
+        "tenant_id": "magic",
+        "user_id": "tragic",
+        "volume_id": "toe-tac-tic",
+        "volume_size": 40
+    },
+    "source": "openstack",
+    "timestamp": "1970-01-01 00:00:00.000000",
+    "type": "gauge",
+    "unit": "GB",
+    "user_id": "tragic",
+    "volume": 40
+}

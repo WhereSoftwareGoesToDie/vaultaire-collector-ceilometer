@@ -38,7 +38,7 @@ import           Ceilometer.Types
 --   Processes JSON objects from the configured queue and publishes
 --   SimplePoints and SourceDicts to the vault
 runPublisher :: IO ()
-runPublisher = runCollector parseOptions initState cleanup publishSamples
+runPublisher = runCollectorN parseOptions initState cleanup publishSamples
   where
     parseOptions = CeilometerOptions
         <$> (T.pack <$> strOption
@@ -74,9 +74,9 @@ runPublisher = runCollector parseOptions initState cleanup publishSamples
         <*> option auto
             (long "poll-period"
              <> short 'p'
-             <> value 1000000
+             <> value 5
              <> metavar "POLL-PERIOD"
-             <> help "Time to wait (in microseconds) before re-querying empty queue.")
+             <> help "Time to wait (in seconds) before re-querying empty queue.")
         <*> strOption
             (long "password-file"
              <> short 'f'
@@ -96,15 +96,13 @@ runPublisher = runCollector parseOptions initState cleanup publishSamples
         (_, CeilometerOptions{..}) <- ask
         (_, CeilometerState{..}) <- get
         forever $ do
-            liftIO $ infoM "Ceilometer.Process.publishSamples" "Waiting for message"
             msg <- liftIO $ getMsg ceilometerMessageChan Ack rabbitQueue
             case msg of
                 Nothing          -> liftIO $ do
                     infoM "Ceilometer.Process.publishSamples" $
-                        "No message received, sleeping for " <> show rabbitPollPeriod <> " us"
-                    threadDelay rabbitPollPeriod
+                        "No message received, sleeping for " <> show rabbitPollPeriod <> " s"
+                    threadDelay (1000000 * rabbitPollPeriod)
                 Just (msg', env) -> do
-                    liftIO $ infoM "Ceilometer.Process.publishSamples" "received message"
                     tuples <- processSample $ msgBody msg'
                     forM_ tuples (\(addr, sd, ts, p) -> do
                         collectSource addr sd
@@ -114,26 +112,98 @@ runPublisher = runCollector parseOptions initState cleanup publishSamples
 -- | Takes in a JSON Object and processes it into a list of
 --   (Address, SourceDict, TimeStamp, Payload) tuples
 processSample :: L.ByteString -> PublicationData
-processSample bs = do
-    liftIO $ infoM "Ceilometer.Process.processSample" "decoding message"
+processSample bs =
     case eitherDecode bs of
         Left e             -> do
             liftIO $ alertM "Ceilometer.Process.processSample" $
                 "Failed to parse: " <> L.unpack bs <> " Error: " <> e
             return []
-        Right m@Metric{..} -> case (metricName, isEvent m) of
-            ("instance", False) -> processInstance m
-            ("cpu", False) -> processBasePollster m
-            ("disk.write.bytes", False) -> processBasePollster m
-            ("disk.read.bytes", False) -> processBasePollster m
-            ("network.incoming.bytes", False) -> processBasePollster m
-            ("network.outgoing.bytes", False) -> processBasePollster m
-            ("ip.floating", True) -> processIpEvent m
-            ("volume.size", True) -> processVolumeEvent m
-            (x, y) -> do
-                liftIO $ infoM "Ceilometer.Process.processSample" $
-                    "Unsupported metric: " <> show x <> " event: " <> show y
-                return []
+        Right m -> process m
+
+process :: Metric -> PublicationData
+process m = process' (metricName m) (isEvent m)
+  where
+-- Supported metrics
+    -- We process both instance pollsters and events
+    process' "instance"                   False = processInstancePollster   m
+    process' "instance"                   True  = processInstanceEvent      m
+    process' "cpu"                        False = processBasePollster       m
+    process' "disk.write.bytes"           False = processBasePollster       m
+    process' "disk.read.bytes"            False = processBasePollster       m
+    process' "network.incoming.bytes"     False = processBasePollster       m
+    process' "network.outgoing.bytes"     False = processBasePollster       m
+    process' "ip.floating"                True  = processIpEvent            m
+    process' "volume.size"                True  = processVolumeEvent        m
+    -- We process both image.size pollsters and events
+    process' "image.size"                 False = processBasePollster       m
+    process' "image.size"                 True  = processImageSizeEvent     m
+    process' "snapshot.size"              True  = processSnapshotSizeEvent  m
+
+    -- Ignored metrics
+    -- Tracking both disk.r/w and disk.device.r/w will most likely double count
+    process' x@"disk.device.write.bytes"    y       = ignore x y
+    process' x@"disk.device.read.bytes"     y       = ignore x y
+    -- We meter on bytes not requests
+    process' x@"disk.write.requests"        y       = ignore x y
+    process' x@"disk.read.requests"         y       = ignore x y
+    process' x@"disk.device.write.requests" y       = ignore x y
+    process' x@"disk.device.read.requests"  y       = ignore x y
+    -- We derive these from instance pollsters
+    process' x@"disk.ephemeral.size"        y@True  = ignore x y
+    process' x@"disk.root.size"             y@True  = ignore x y
+    process' x@"volume"                     y       = ignore x y
+    process' x@"vcpus"                      y       = ignore x y
+    process' x@"memory"                     y       = ignore x y
+    -- We meter on bytes not packets
+    process' x@"network.incoming.packets"   y       = ignore x y
+    process' x@"network.outgoing.packets"   y       = ignore x y
+    -- We use notifications over pollsters for ip-allocations
+    process' x@"ip.floating"                y@False = ignore x y
+
+    process' x@"ip.floating.create"         y       = ignore x y
+    process' x@"ip.floating.update"         y       = ignore x y
+    process' x@"ip.floating.delete"         y       = ignore x y
+    -- These seem to be linked to constructing the stack, and are not common
+    -- We potentially care about the network/disk I/O of these ops
+    process' x@"image"                      y       = ignore x y
+    process' x@"image.update"               y@True  = ignore x y
+    process' x@"image.download"             y@True  = ignore x y
+    process' x@"image.serve"                y@True  = ignore x y
+    process' x@"image.upload"               y@True  = ignore x y
+    process' x@"image.delete"               y@True  = ignore x y
+
+    -- We care about ip allocations, these metrics are superfluous
+    process' x@"port"                       y       = ignore x y
+    process' x@"port.create"                y       = ignore x y
+    process' x@"port.update"                y       = ignore x y
+    process' x@"port.delete"                y       = ignore x y
+    process' x@"network"                    y       = ignore x y
+    process' x@"network.create"             y       = ignore x y
+    process' x@"network.update"             y       = ignore x y
+    process' x@"network.delete"             y       = ignore x y
+    process' x@"subnet"                     y       = ignore x y
+    process' x@"subnet.create"              y       = ignore x y
+    process' x@"subnet.update"              y       = ignore x y
+    process' x@"subnet.delete"              y       = ignore x y
+    process' x@"router"                     y       = ignore x y
+    process' x@"router.create"              y       = ignore x y
+    process' x@"router.update"              y       = ignore x y
+    process' x@"router.delete"              y       = ignore x y
+    process' x@"snapshot"                   y       = ignore x y
+    process' x@"network.services.firewall.policy" y = ignore x y
+
+    process' x y
+        | "instance:" `T.isPrefixOf` x = ignore x y
+        | otherwise = alert x y
+    ignore x y = do
+        liftIO $ infoM "Ceilometer.Process.processSample" $
+            "Ignored metric: " <> show x <> " event: " <> show y
+        return []
+    alert x y = do
+        liftIO $ alertM "Ceilometer.Process.processSample" $
+            "Unexpected metric: " <> show x <> " event: " <> show y <>
+            "\n" <> show m
+        return []
 
 -- Utility
 
@@ -147,9 +217,12 @@ getEventType m = case H.lookup "event_type" $ metricMetadata m of
 
 isCompound :: Metric -> Bool
 isCompound m
-    | isEvent m && metricName m == "ip.floating" = True
-    | isEvent m && metricName m == "volume.size" = True
-    | otherwise                                  = False
+    | isEvent m && metricName m == "ip.floating"   = True
+    | isEvent m && metricName m == "volume.size"   = True
+    | isEvent m && metricName m == "image.size"    = True
+    | isEvent m && metricName m == "snapshot.size" = True
+    | isEvent m && metricName m == "instance"      = True
+    | otherwise                                    = False
 
 -- | Constructs the internal HashMap of a SourceDict for the given Metric
 --   Appropriately excludes optional fields when not present
@@ -210,8 +283,8 @@ processBasePollster m@Metric{..} = do
 
 -- | Extracts vcpu, ram, disk and flavor data from an instance pollster
 --   Publishes each of these as their own metric with their own Address
-processInstance :: Metric -> PublicationData
-processInstance m@Metric{..} = do
+processInstancePollster :: Metric -> PublicationData
+processInstancePollster m@Metric{..} = do
     let baseMap = getSourceMap m --The sourcedict for the 4 metrics is mostly shared
     let names = ["instance_vcpus", "instance_ram", "instance_disk", "instance_flavor"]
     let uoms  = ["vcpu"          , "MB"          , "GB"           , "instance"       ]
@@ -243,11 +316,20 @@ processInstance m@Metric{..} = do
 
 -- Event based metrics
 
+processImageSizeEvent :: Metric -> PublicationData
+processImageSizeEvent = processEvent getImagePayload
+
+processInstanceEvent :: Metric -> PublicationData
+processInstanceEvent m = return [] --processEvent getInstancePayload
+
 processVolumeEvent :: Metric -> PublicationData
 processVolumeEvent = processEvent getVolumePayload
 
 processIpEvent :: Metric -> PublicationData
 processIpEvent = processEvent getIpPayload
+
+processSnapshotSizeEvent :: Metric -> PublicationData
+processSnapshotSizeEvent = processEvent getSnapshotSizePayload
 
 -- | Constructs the appropriate compound payload and vault data for an event
 processEvent :: (Metric -> IO (Maybe Word64)) -> Metric -> PublicationData
@@ -260,47 +342,97 @@ processEvent f m@Metric{..} = do
             [(addr, sd', metricTimeStamp, compoundPayload)]
         _ -> []
 
+-- | Constructs the compound payload for ip allocation events
+getImagePayload :: Metric -> IO (Maybe Word64)
+getImagePayload m@Metric{..} = do
+    let _:verb:_ = T.splitOn "." $ fromJust $ getEventType m
+    let (String status)  = fromJust $ H.lookup "status" metricMetadata
+    statusValue <- case status of
+        "active"  -> return 1
+        "saving"  -> return 2
+        "deleted" -> return 3
+        x        -> do
+            alertM "Ceilometer.Process.getImagePayload" $
+                "Invalid status for image event: " <> show x
+            return (-1)
+    verbValue <- case verb of
+        "serve"    -> return 1
+        "update"   -> return 2
+        "upload"   -> return 3
+        "download" -> return 4
+        "delete"   -> return 5
+        x          -> do
+            alertM "Ceilometer.Process.getImagePayload" $
+                "Invalid verb for image event: " <> show x
+            return (-1)
+    let endpointValue = 0
+    return $ if (-1) `elem` [statusValue, verbValue, endpointValue] then
+        Nothing
+    else
+        Just $ constructCompoundPayload statusValue verbValue endpointValue ipRawPayload
+
+{-
+ -  The structure of status data in instance events is complicated
+ -  and inconsistent. Requires further digging to fully leverage. Since
+ -  pollsters are currently supported, events will be supported later.
+ -
+-- | Constructs the compound payload for instance events
+getInstancePayload :: Metric -> IO (Maybe Word64)
+getInstancePayload m@Metric{..} = do
+    let components = drop 2 $ T.splitOn "." $ fromJust $ getEventType m
+    let (String status)  = fromJust $ H.lookup "status" metricMetadata
+    case components of
+        --Superfluous, duplicated for every other event
+        ["exists"]           ->  return Nothing
+        --Superfluous, duplicated for every other event
+        ["update"]           ->  return Nothing
+        ["volume", "attach"] ->  return Nothing
+        [x, y]               ->  return Nothing
+        x -> return Nothing
+
+-}
+
 -- | Constructs the compound payload for volume events
 getVolumePayload :: Metric -> IO (Maybe Word64)
 getVolumePayload m@Metric{..} = do
     let _:verb:endpoint:_ = T.splitOn "." $ fromJust $ getEventType m
     let (String status)  = fromJust $ H.lookup "status" metricMetadata
     statusValue <- case status of
+        "error"     -> return 0
         "available" -> return 1
         "creating"  -> return 2
         "extending" -> return 3
         "deleting"  -> return 4
+        "attaching" -> return 5
+        "detaching" -> return 6
+        "in-use"    -> return 7
         x           -> do
             alertM "Ceilometer.Process.getVolumePayload" $
                 "Invalid status for volume event: " <> show x
-            return 0
+            return (-1)
     verbValue <- case verb of
         "create" -> return 1
         "resize" -> return 2
         "delete" -> return 3
-        "attach" -> infoM "Ceilometer.Process.getVolumePayload"
-                           "Ignoring volume attach event"
-                           >> return 0
-        "detach" -> infoM "Ceilometer.Process.getVolumePayload"
-                           "Ignoring volume detach event"
-                           >> return 0
+        "attach" -> return 4
+        "detach" -> return 5
         x        -> do
             alertM "Ceilometer.Process.getVolumePayload" $
                 "Invalid verb for volume event: " <> show x
-            return 0
+            return (-1)
     endpointValue <- case endpoint of
         "start" -> return 1
         "end"   -> return 2
         x       -> do
             alertM "Ceilometer.Process.getVolumePayload" $
                 "Invalid endpoint for volume event: " <> show x
-            return 0
-    return $ if 0 `elem` [statusValue, verbValue, endpointValue] then
+            return (-1)
+    return $ if (-1) `elem` [statusValue, verbValue, endpointValue] then
         Nothing
     else
         Just $ constructCompoundPayload statusValue verbValue endpointValue metricPayload
 
--- | An allocation has no 'value' per se, so we arbitarily use 1 
+-- | An allocation has no 'value' per se, so we arbitarily use 1
 ipRawPayload :: Word64
 ipRawPayload = 1
 
@@ -308,32 +440,69 @@ ipRawPayload = 1
 getIpPayload :: Metric -> IO (Maybe Word64)
 getIpPayload m@Metric{..} = do
     let _:verb:endpoint:_ = T.splitOn "." $ fromJust $ getEventType m
-    let (String status)  = fromJust $ H.lookup "status" metricMetadata
+    let status = H.lookup "status" metricMetadata
     statusValue <- case status of
-        "ACTIVE" -> return 1
-        "DOWN"   -> return 2
-        x        -> do
+        Nothing                -> return 0
+        Just Null              -> return 0
+        Just (String "ACTIVE") -> return 1
+        Just (String "DOWN")   -> return 2
+        Just x                 -> do
             alertM "Ceilometer.Process.getIpPayload" $
                 "Invalid status for ip event: " <> show x
-            return 0
+            return (-1)
     verbValue <- case verb of
         "create" -> return 1
         "update" -> return 2
+        "delete" -> return 3
         x        -> do
             alertM "Ceilometer.Process.getIpPayload" $
                 "Invalid verb for ip event: " <> show x
-            return 0
+            return (-1)
     endpointValue <- case endpoint of
         "start" -> return 1
         "end"   -> return 2
         x       -> do
             alertM "Ceilometer.Process.getIpPayload" $
                 "Invalid endpoint for ip event: " <> show x
-            return 0
-    return $ if 0 `elem` [statusValue, verbValue, endpointValue] then
+            return (-1)
+    return $ if (-1) `elem` [statusValue, verbValue, endpointValue] then
         Nothing
     else
         Just $ constructCompoundPayload statusValue verbValue endpointValue ipRawPayload
+
+-- | Constructs the compound payload for ip allocation events
+getSnapshotSizePayload :: Metric -> IO (Maybe Word64)
+getSnapshotSizePayload m@Metric{..} = do
+    let _:verb:endpoint:_ = T.splitOn "." $ fromJust $ getEventType m
+    let (String status)  = fromJust $ H.lookup "status" metricMetadata
+    statusValue <- case status of
+        "error"     -> return 0
+        "available" -> return 1
+        "creating"  -> return 2
+        "deleting"  -> return 3
+        x           -> do
+            alertM "Ceilometer.Process.getSnapshotSizePayload" $
+                "Invalid status for snapshot size event: " <> show x
+            return (-1)
+    verbValue <- case verb of
+        "create" -> return 1
+        "update" -> return 2
+        "delete" -> return 3
+        x        -> do
+            alertM "Ceilometer.Process.getSnapshotSizePayload" $
+                "Invalid verb for snapshot size event: " <> show x
+            return (-1)
+    endpointValue <- case endpoint of
+        "start" -> return 1
+        "end"   -> return 2
+        x       -> do
+            alertM "Ceilometer.Process.getSnapshotSizePayload" $
+                "Invalid endpoint for snapshot size event: " <> show x
+            return (-1)
+    return $ if (-1) `elem` [statusValue, verbValue, endpointValue] then
+        Nothing
+    else
+        Just $ constructCompoundPayload statusValue verbValue endpointValue metricPayload
 
 -- | Constructs a compound payload from components
 constructCompoundPayload :: Word64 -> Word64 -> Word64 -> Word64 -> Word64

@@ -29,6 +29,7 @@ instance Read CeilometerTime where
       where
         parse' :: String -> Maybe UTCTime
         parse' x  = parseTime defaultTimeLocale "%FT%T%QZ" x
+                <|> parseTime defaultTimeLocale "%FT%T%Q" x
                 <|> parseTime defaultTimeLocale "%FT%T%Q%z" x
                 <|> parseTime defaultTimeLocale "%F %T%Q%z" x
                 <|> parseTime defaultTimeLocale "%F %T%Q" x
