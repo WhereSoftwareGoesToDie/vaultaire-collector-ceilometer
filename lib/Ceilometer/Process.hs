@@ -239,8 +239,11 @@ getSourceMap m@Metric{..} =
         displayName = case H.lookup "display_name" metricMetadata of
             Just (String x) -> [("display_name", x)]
             _               -> []
+        volumeType = case H.lookup "volume_type" metricMetadata of
+            Just (String x) -> [("volume_type", x)]
+            _               -> []
         counter = [("_counter", "1") | metricType == "cumulative"]
-    in H.fromList $ counter <> base <> displayName
+    in H.fromList $ counter <> base <> displayName <> volumeType
 
 -- | Wrapped construction of a SourceDict with logging
 mapToSourceDict :: HashMap Text Text -> IO (Maybe SourceDict)
@@ -340,7 +343,9 @@ processEvent f m@Metric{..} = do
     return $ case (p, sd) of
         (Just compoundPayload, Just sd') ->
             [(addr, sd', metricTimeStamp, compoundPayload)]
-        _ -> []
+	-- Sub functions will alert, alerts cause termination by default
+	-- so this case should not be reached
+        _ -> error $ "Impossible control flow reached in processEvent. Given: " ++ show m
 
 -- | Constructs the compound payload for ip allocation events
 getImagePayload :: Metric -> IO (Maybe Word64)
