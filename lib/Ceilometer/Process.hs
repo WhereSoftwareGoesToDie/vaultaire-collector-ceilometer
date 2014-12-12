@@ -343,8 +343,8 @@ processEvent f m@Metric{..} = do
     return $ case (p, sd) of
         (Just compoundPayload, Just sd') ->
             [(addr, sd', metricTimeStamp, compoundPayload)]
-	-- Sub functions will alert, alerts cause termination by default
-	-- so this case should not be reached
+        -- Sub functions will alert, alerts cause termination by default
+        -- so this case should not be reached
         _ -> error $ "Impossible control flow reached in processEvent. Given: " ++ show m
 
 -- | Constructs the compound payload for ip allocation events
