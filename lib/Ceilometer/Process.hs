@@ -239,8 +239,11 @@ getSourceMap m@Metric{..} =
         displayName = case H.lookup "display_name" metricMetadata of
             Just (String x) -> [("display_name", x)]
             _               -> []
+        volumeType = case H.lookup "volume_type" metricMetadata of
+            Just (String x) -> [("volume_type", x)]
+            _               -> []
         counter = [("_counter", "1") | metricType == "cumulative"]
-    in H.fromList $ counter <> base <> displayName
+    in H.fromList $ counter <> base <> displayName <> volumeType
 
 -- | Wrapped construction of a SourceDict with logging
 mapToSourceDict :: HashMap Text Text -> IO (Maybe SourceDict)

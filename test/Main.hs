@@ -46,7 +46,8 @@ expectedVolumeHashmap = H.fromList
     ("metric_name", "volume.size"),
     ("metric_unit", "GB"),
     ("metric_type", "gauge"),
-    ("display_name", "cathartic")
+    ("display_name", "cathartic"),
+    ("volume_type", "lethargic")
   ]
 
 expectedVolumeSd :: SourceDict
