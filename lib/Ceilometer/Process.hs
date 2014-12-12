@@ -323,7 +323,7 @@ processImageSizeEvent :: Metric -> PublicationData
 processImageSizeEvent = processEvent getImagePayload
 
 processInstanceEvent :: Metric -> PublicationData
-processInstanceEvent m = return [] --processEvent getInstancePayload
+processInstanceEvent m = return [] -- See https://github.com/anchor/vaultaire-collector-ceilometer/issues/4
 
 processVolumeEvent :: Metric -> PublicationData
 processVolumeEvent = processEvent getVolumePayload
@@ -375,27 +375,6 @@ getImagePayload m@Metric{..} = do
         Nothing
     else
         Just $ constructCompoundPayload statusValue verbValue endpointValue ipRawPayload
-
-{-
- -  The structure of status data in instance events is complicated
- -  and inconsistent. Requires further digging to fully leverage. Since
- -  pollsters are currently supported, events will be supported later.
- -
--- | Constructs the compound payload for instance events
-getInstancePayload :: Metric -> IO (Maybe Word64)
-getInstancePayload m@Metric{..} = do
-    let components = drop 2 $ T.splitOn "." $ fromJust $ getEventType m
-    let (String status)  = fromJust $ H.lookup "status" metricMetadata
-    case components of
-        --Superfluous, duplicated for every other event
-        ["exists"]           ->  return Nothing
-        --Superfluous, duplicated for every other event
-        ["update"]           ->  return Nothing
-        ["volume", "attach"] ->  return Nothing
-        [x, y]               ->  return Nothing
-        x -> return Nothing
-
--}
 
 -- | Constructs the compound payload for volume events
 getVolumePayload :: Metric -> IO (Maybe Word64)
