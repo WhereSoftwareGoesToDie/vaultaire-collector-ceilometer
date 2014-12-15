@@ -347,7 +347,7 @@ processEvent f m@Metric{..} = do
         -- so this case should not be reached
         _ -> error $ "Impossible control flow reached in processEvent. Given: " ++ show m
 
--- | Constructs the compound payload for ip allocation events
+-- | Constructs the compound payload for image events
 getImagePayload :: Metric -> IO (Maybe Word64)
 getImagePayload m@Metric{..} = do
     let _:verb:_ = T.splitOn "." $ fromJust $ getEventType m
