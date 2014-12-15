@@ -75,6 +75,8 @@ test-suite           tests
                      QuickCheck,
                      bytestring,
                      text,
+                     --required for conduit
+                     monad-control >= 0.3.1 && < 0.4,                     
                      unordered-containers,
                      vaultaire-collector-ceilometer,
                      vaultaire-common,
