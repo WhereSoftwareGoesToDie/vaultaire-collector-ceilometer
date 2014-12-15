@@ -1,10 +1,8 @@
-{-# LANGUAGE
-    OverloadedStrings
-  #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Main where
 
-import Ceilometer.Process
+import           Ceilometer.Process
 
 main :: IO ()
 main = runPublisher
