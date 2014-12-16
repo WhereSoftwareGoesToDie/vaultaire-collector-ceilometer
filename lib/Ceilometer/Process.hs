@@ -221,7 +221,7 @@ isCompound m
     | isEvent m && metricName m == "volume.size"   = True
     | isEvent m && metricName m == "image.size"    = True
     | isEvent m && metricName m == "snapshot.size" = True
-    | isEvent m && metricName m == "instance"      = True
+    |              metricName m == "instance"      = True
     | otherwise                                    = False
 
 -- | Constructs the internal HashMap of a SourceDict for the given Metric
@@ -268,9 +268,9 @@ getIdElements m@Metric{..} name =
 getAddress :: Metric -> Text -> Address
 getAddress m name = hashIdentifier $ T.encodeUtf8 $ mconcat $ getIdElements m name
 
--- | Canonical siphash with key = 0
+-- | Canonical siphash with key = 0, truncated to 32 bits
 siphash :: S.ByteString -> Word64
-siphash x = let (SipHash h) = hash (SipKey 0 0) x in h
+siphash x = let (SipHash h) = hash (SipKey 0 0) x in (h `shift` (-32))
 
 -- Pollster based metrics
 
@@ -306,16 +306,38 @@ processInstancePollster m@Metric{..} = do
                 liftIO $ alertM "Ceilometer.Process.processInstance" $
                     "Failed to parse flavor sub-object for instance pollster" <> show e
                 return []
-            Success Flavor{..} ->
-                let (String instanceType) = fromJust $ H.lookup "instance_type" metricMetadata
-                    instanceType' = siphash $ T.encodeUtf8 instanceType
-                    diskTotal = instanceDisk + instanceEphemeral
-                    payloads = [instanceVcpus, instanceRam, diskTotal, instanceType']
-                in return (zip4 addrs sds (repeat metricTimeStamp) payloads)
+            Success f -> do
+                payloads <- liftIO $ getInstancePayloads m f
+                case payloads of
+                    Just ps -> return $ zip4 addrs sds (repeat metricTimeStamp) ps
+                    Nothing -> return []
     else do
         liftIO $ alertM "Ceilometer.Process.processInstance"
             "Failure to convert all sourceMaps to SourceDicts for instance pollster"
         return []
+
+-- | Constructs the compound payload for instance pollsters
+getInstancePayloads :: Metric -> Flavor -> IO (Maybe [Word64])
+getInstancePayloads Metric{..} Flavor{..} = do
+    let (String status)  = fromJust $ H.lookup "status" metricMetadata
+    let (String instanceType) = fromJust $ H.lookup "instance_type" metricMetadata
+    let instanceType' = siphash $ T.encodeUtf8 instanceType
+    let diskTotal = instanceDisk + instanceEphemeral
+    let rawPayloads = [instanceVcpus, instanceRam, diskTotal, instanceType']
+    statusValue <- case status of
+        "error"     -> return 0
+        "available" -> return 1
+        "creating"  -> return 2
+        "deleting"  -> return 3
+        x           -> do
+            alertM "Ceilometer.Process.getInstancePayloads" $
+                "Invalid status for instance pollster: " <> show x
+            return (-1)
+    return $ if statusValue == (-1) then
+        Nothing
+    else
+        -- Since this is for pollsters, both verbs and endpoints are meaningless
+        Just $ map (constructCompoundPayload statusValue 0 0) rawPayloads
 
 -- Event based metrics
 
