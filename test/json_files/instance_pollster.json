@@ -40,3 +40,6 @@
     "user_id": "magic",
     "volume": 1
 }
+
+
+{'user_id': u'29ce915f6f80426f8d059e6495e4441a', 'name': 'instance', 'resource_id': u'5aabb126-8a4f-4f91-8dca-2373f381f0bd', 'timestamp': '2014-12-16T00:30:21Z', 'resource_metadata': {'status': u'active', 'ephemeral_gb': 0, 'display_name': u'mailtest.entropyonwheels.com', 'name': u'instance-000011c4', 'disk_gb': 20, 'kernel_id': None, 'image': None, 'ramdisk_id': None, 'vcpus': 1, 'memory_mb': 2048, 'instance_type': u'2', 'host': u'791cbe143b66e812fc52a38182858a2d29c124cb89de548f6978c0e6', 'root_gb': 20, 'image_ref': None, 'flavor': {'name': u'm1.small', u'links': [{u'href': u'http://nova.int.syd1.prod.os.anchor.net.au:8774/v2/%(tenant_id)s/bd3f518204b54407854a7dd8d1c49931/flavors/2', u'rel': u'bookmark'}], 'ram': 2048, 'ephemeral': 0, 'vcpus': 1, 'disk': 20, u'id': u'2'}, 'OS-EXT-AZ:availability_zone': u'syd1', 'image_ref_url': None}, 'volume': 1, 'source': 'openstack', 'project_id': u'5e4b3c183e3f4c4aa5e5e8b78a6c80c2', 'type': 'gauge', 'id': 'b821ac54-84ba-11e4-b4fb-ecf4bbc20384', 'unit': 'instance'}

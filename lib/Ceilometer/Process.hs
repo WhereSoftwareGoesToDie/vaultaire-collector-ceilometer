@@ -350,11 +350,10 @@ getInstancePayloads Metric{..} Flavor{..} = do
             let diskTotal = instanceDisk + instanceEphemeral
             let rawPayloads = [instanceVcpus, instanceRam, diskTotal, instanceType']
             statusValue <- case status of
-                "error"     -> return 0
-                "available" -> return 1
-                "creating"  -> return 2
-                "deleting"  -> return 3
-                x           -> do
+                "error"   -> return 0
+                "active"  -> return 1
+                "shutoff" -> return 2
+                x         -> do
                     alertM "Ceilometer.Process.getInstancePayloads"
                          $ "Invalid status for instance pollster: " <> show x
                     return (-1)
