@@ -1,18 +1,17 @@
-{-# LANGUAGE
-    OverloadedStrings
-  , TupleSections
-  #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections     #-}
 
 module Ceilometer.Types where
 
 import           Control.Applicative
+import           Control.Concurrent.STM.TChan
 import           Control.Monad
 import           Data.Aeson
 import           Data.Aeson.Types
-import           Data.HashMap.Strict(HashMap)
+import           Data.HashMap.Strict              (HashMap)
 import           Data.Maybe
-import           Data.Text(Text)
-import qualified Data.Text as T
+import           Data.Text                        (Text)
+import qualified Data.Text                        as T
 import           Data.Time.Clock
 import           Data.Time.Format
 import           Data.Word
@@ -45,14 +44,14 @@ ceilometerToTimeStamp :: CeilometerTime -> TimeStamp
 ceilometerToTimeStamp (CeilometerTime t) = convertToTimeStamp t
 
 data Metric = Metric
-    { metricName        :: Text
-    , metricType        :: Text
-    , metricUOM         :: Text
-    , metricPayload     :: Word64
-    , metricProjectId   :: Text
-    , metricResourceId  :: Text
-    , metricTimeStamp   :: TimeStamp
-    , metricMetadata    :: HashMap Text Value
+    { metricName       :: Text
+    , metricType       :: Text
+    , metricUOM        :: Text
+    , metricPayload    :: Word64
+    , metricProjectId  :: Text
+    , metricResourceId :: Text
+    , metricTimeStamp  :: TimeStamp
+    , metricMetadata   :: HashMap Text Value
     } deriving Show
 
 data Flavor = Flavor
@@ -63,19 +62,20 @@ data Flavor = Flavor
     } deriving Show
 
 data CeilometerOptions = CeilometerOptions
-    { rabbitLogin :: Text
-    , rabbitVHost :: Text
-    , rabbitHost  :: String
-    , rabbitHa    :: Bool
-    , rabbitUseSSL :: Bool
-    , rabbitQueue   :: Text
-    , rabbitPollPeriod :: Int
+    { rabbitLogin        :: Text
+    , rabbitVHost        :: Text
+    , rabbitHost         :: String
+    , rabbitHa           :: Bool
+    , rabbitUseSSL       :: Bool
+    , rabbitQueue        :: Text
+    , rabbitPollPeriod   :: Int
     , rabbitPasswordFile :: FilePath
     }
 
 data CeilometerState = CeilometerState
-    { ceilometerMessageConn  :: Connection
-    , ceilometerMessageChan  :: Channel
+    { ceilometerMessageConn :: Connection
+    , ceilometerMessageChan :: Channel
+    , inChan                :: TChan (Message, Envelope)
     }
 
 type Publisher = Collector CeilometerOptions CeilometerState IO

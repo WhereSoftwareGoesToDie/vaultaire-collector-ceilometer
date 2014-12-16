@@ -1,5 +1,5 @@
 name:                vaultaire-collector-ceilometer
-version:             0.2.1
+version:             0.2.2
 synopsis:            Vaultaire Collector for Ceilometer
 homepage:            https://github.com/anchor/vaultaire-collector-ceilometer
 license:             BSD3
@@ -32,8 +32,9 @@ library
                      time,
                      old-locale,
                      mtl,
-                     vaultaire-collector-common >= 0.3.0,
-                     vaultaire-common
+                     vaultaire-collector-common >= 0.4.0,
+                     vaultaire-common,
+                     stm
 
   ghc-options:       -O2
                      -threaded

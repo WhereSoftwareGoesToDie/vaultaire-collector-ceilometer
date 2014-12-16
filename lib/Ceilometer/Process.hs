@@ -5,6 +5,7 @@ module Ceilometer.Process(runPublisher, processSample, siphash) where
 
 import           Control.Applicative
 import           Control.Concurrent                 hiding (yield)
+import           Control.Concurrent.STM
 import           Control.Monad
 import           Control.Monad.Reader
 import           Control.Monad.State
@@ -31,6 +32,7 @@ import           System.Log.Logger
 
 import           Marquise.Client
 import           Vaultaire.Collector.Common.Process
+import           Vaultaire.Collector.Common.Types
 
 import           Ceilometer.Types
 
@@ -38,7 +40,7 @@ import           Ceilometer.Types
 --   Processes JSON objects from the configured queue and publishes
 --   SimplePoints and SourceDicts to the vault
 runPublisher :: IO ()
-runPublisher = runCollectorN parseOptions initState cleanup publishSamples
+runPublisher = runCollectorP parseOptions initState cleanup queueSamples consumeSamples
   where
     parseOptions = CeilometerOptions
         <$> (T.pack <$> strOption
@@ -82,32 +84,38 @@ runPublisher = runCollectorN parseOptions initState cleanup publishSamples
              <> short 'f'
              <> metavar "PASSWORD-FILE"
              <> help "File containing the password to use for RabbitMQ")
-    initState (_, CeilometerOptions{..}) = do
+    initState (CommonOpts{..}, CeilometerOptions{..}) = do
         password <- withFile rabbitPasswordFile ReadMode T.hGetLine
         conn <- openConnection rabbitHost rabbitVHost rabbitLogin password
         infoM "Ceilometer.Process.initState" "Connected to RabbitMQ server"
         chan <- openChannel conn
         infoM "Ceilometer.Process.initState" "Opened channel"
-        return $ CeilometerState conn chan
+        inChan <- atomically newTChan
+        return $ CeilometerState conn chan inChan
     cleanup = do
-        (_, CeilometerState conn _ ) <- get
+        (_, CeilometerState conn _ _) <- get
         liftIO $ closeConnection conn
-    publishSamples = do
+    queueSamples = do
         (_, CeilometerOptions{..}) <- ask
         (_, CeilometerState{..}) <- get
         forever $ do
             msg <- liftIO $ getMsg ceilometerMessageChan Ack rabbitQueue
             case msg of
-                Nothing          -> liftIO $ do
+                Nothing   -> liftIO $ do
                     infoM "Ceilometer.Process.publishSamples" $
                         "No message received, sleeping for " <> show rabbitPollPeriod <> " s"
                     threadDelay (1000000 * rabbitPollPeriod)
-                Just (msg', env) -> do
-                    tuples <- processSample $ msgBody msg'
-                    forM_ tuples (\(addr, sd, ts, p) -> do
-                        collectSource addr sd
-                        collectSimple (SimplePoint addr ts p))
-                    liftIO $ ackEnv env
+                Just msg' -> liftIO $ atomically $ writeTChan inChan msg'     
+    consumeSamples = do
+        (_, CeilometerOptions{..}) <- ask
+        (_, CeilometerState{..}) <- get
+        forever $ do
+            (msg, env) <- liftIO $ atomically $ readTChan inChan
+            tuples <- processSample $ msgBody msg
+            forM_ tuples (\(addr, sd, ts, p) -> do
+                collectSource addr sd
+                collectSimple (SimplePoint addr ts p))
+            liftIO $ ackEnv env
 
 -- | Takes in a JSON Object and processes it into a list of
 --   (Address, SourceDict, TimeStamp, Payload) tuples
