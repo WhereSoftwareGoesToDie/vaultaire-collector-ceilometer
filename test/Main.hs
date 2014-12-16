@@ -79,7 +79,7 @@ expectedInstancePollsterTimestamp :: TimeStamp
 expectedInstancePollsterTimestamp = TimeStamp 1412235708000000000
 
 expectedInstanceFlavorPayload :: Word64
-expectedInstanceFlavorPayload = siphash "2"
+expectedInstanceFlavorPayload = 1 + (siphash "2" `shift` 32)
 
 expectedInstanceFlavorHashmap :: HashMap Text Text
 expectedInstanceFlavorHashmap = H.fromList
@@ -89,7 +89,7 @@ expectedInstanceFlavorHashmap = H.fromList
     ("display_name", "cathartic"),
     ("metric_type", "gauge"),
     ("metric_unit", "instance"),
-    ("_compound", "0"),
+    ("_compound", "1"),
     ("_event", "0")
   ]
 
@@ -97,7 +97,7 @@ expectedInstanceFlavorSd :: SourceDict
 expectedInstanceFlavorSd = either error id (makeSourceDict expectedInstanceFlavorHashmap)
 
 expectedInstanceRamPayload :: Word64
-expectedInstanceRamPayload = 2048
+expectedInstanceRamPayload = 1 + (2048 `shift` 32)
 
 expectedInstanceRamHashmap :: HashMap Text Text
 expectedInstanceRamHashmap = H.fromList
@@ -107,7 +107,7 @@ expectedInstanceRamHashmap = H.fromList
     ("display_name", "cathartic"),
     ("metric_type", "gauge"),
     ("metric_unit", "MB"),
-    ("_compound", "0"),
+    ("_compound", "1"),
     ("_event", "0")
   ]
 
@@ -115,7 +115,7 @@ expectedInstanceRamSd :: SourceDict
 expectedInstanceRamSd = either error id (makeSourceDict expectedInstanceRamHashmap)
 
 expectedInstanceVCpuPayload :: Word64
-expectedInstanceVCpuPayload = 1
+expectedInstanceVCpuPayload = 1 + (1 `shift` 32)
 
 expectedInstanceVCpuHashmap :: HashMap Text Text
 expectedInstanceVCpuHashmap = H.fromList
@@ -125,7 +125,7 @@ expectedInstanceVCpuHashmap = H.fromList
     ("display_name", "cathartic"),
     ("metric_type", "gauge"),
     ("metric_unit", "vcpu"),
-    ("_compound", "0"),
+    ("_compound", "1"),
     ("_event", "0")
   ]
 
@@ -133,7 +133,7 @@ expectedInstanceVCpuSd :: SourceDict
 expectedInstanceVCpuSd = either error id (makeSourceDict expectedInstanceVCpuHashmap)
 
 expectedInstanceDiskPayload :: Word64
-expectedInstanceDiskPayload = 20
+expectedInstanceDiskPayload = 1 + (20 `shift` 32)
 
 expectedInstanceDiskHashmap :: HashMap Text Text
 expectedInstanceDiskHashmap = H.fromList
@@ -143,7 +143,7 @@ expectedInstanceDiskHashmap = H.fromList
     ("display_name", "cathartic"),
     ("metric_type", "gauge"),
     ("metric_unit", "GB"),
-    ("_compound", "0"),
+    ("_compound", "1"),
     ("_event", "0")
   ]
 
