@@ -40,7 +40,7 @@ import           Ceilometer.Types
 --   Processes JSON objects from the configured queue and publishes
 --   SimplePoints and SourceDicts to the vault
 runPublisher :: IO ()
-runPublisher = runCollectorP parseOptions initState cleanup queueSamples consumeSamples
+runPublisher = runCollectorNP parseOptions initState cleanup queueSamples consumeSamples 4
   where
     parseOptions = CeilometerOptions
         <$> (T.pack <$> strOption
