@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
-module Ceilometer.Process(runPublisher, processSample, siphash) where
+module Ceilometer.Process(runPublisher, processSample, siphash, siphash32) where
 
 import           Control.Applicative
 import           Control.Concurrent                 hiding (yield)
@@ -268,9 +268,13 @@ getIdElements m@Metric{..} name =
 getAddress :: Metric -> Text -> Address
 getAddress m name = hashIdentifier $ T.encodeUtf8 $ mconcat $ getIdElements m name
 
--- | Canonical siphash with key = 0, truncated to 32 bits
+-- | Canonical siphash with key = 0
 siphash :: S.ByteString -> Word64
-siphash x = let (SipHash h) = hash (SipKey 0 0) x in (h `shift` (-32))
+siphash x = let (SipHash h) = hash (SipKey 0 0) x in h
+
+-- | Canonical siphash with key = 0, truncated to 32 bits
+siphash32 :: S.ByteString -> Word64
+siphash32 = (`shift` (-32)) . siphash
 
 -- Pollster based metrics
 
@@ -321,7 +325,10 @@ processInstancePollster m@Metric{..} = do
             "Failure to convert all sourceMaps to SourceDicts for instance pollster"
         return []
 
--- | Constructs the compound payload for instance pollsters
+-- | Constructs the compound payloads for instance pollsters
+--   Returns Nothing on failure and a list of 4 Word64s, the
+--   instance_vcpus, instance_ram, instance_disk and instance_flavor
+--   compound payloads respectively.
 getInstancePayloads :: Metric -> Flavor -> IO (Maybe [Word64])
 getInstancePayloads Metric{..} Flavor{..} = do
     st <- case H.lookup "status" metricMetadata of
@@ -346,7 +353,7 @@ getInstancePayloads Metric{..} Flavor{..} = do
             return Nothing
     case (st, ty) of
         (Just status, Just instanceType) -> do
-            let instanceType' = siphash $ T.encodeUtf8 instanceType
+            let instanceType' = siphash32 $ T.encodeUtf8 instanceType
             let diskTotal = instanceDisk + instanceEphemeral
             let rawPayloads = [instanceVcpus, instanceRam, diskTotal, instanceType']
             statusValue <- case status of

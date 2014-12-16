@@ -79,7 +79,7 @@ expectedInstancePollsterTimestamp :: TimeStamp
 expectedInstancePollsterTimestamp = TimeStamp 1412235708000000000
 
 expectedInstanceFlavorPayload :: Word64
-expectedInstanceFlavorPayload = 1 + (siphash "2" `shift` 32)
+expectedInstanceFlavorPayload = 1 + (siphash32 "2" `shift` 32)
 
 expectedInstanceFlavorHashmap :: HashMap Text Text
 expectedInstanceFlavorHashmap = H.fromList
