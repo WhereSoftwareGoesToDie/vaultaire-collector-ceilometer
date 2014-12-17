@@ -31,6 +31,7 @@
         "name": "attic",
         "ramdisk_id": null,
         "root_gb": 20,
+        "status": "active",
         "vcpus": 1
     },
     "source": "openstack",
