@@ -20,6 +20,7 @@ library
 
   build-depends:     base >=4.7 && <4.8,
                      aeson,
+                     async,
                      text,
                      bytestring,
                      hslogger,

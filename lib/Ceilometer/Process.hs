@@ -5,6 +5,7 @@ module Ceilometer.Process(runPublisher, processSample, siphash, siphash32) where
 
 import           Control.Applicative
 import           Control.Concurrent                 hiding (yield)
+import           Control.Concurrent.Async
 import           Control.Concurrent.STM
 import           Control.Monad
 import           Control.Monad.Reader
@@ -98,7 +99,8 @@ runPublisher = runCollectorN parseOptions initState cleanup queueSamples
         inChan <- liftIO $ atomically newTChan
         (_, CeilometerOptions{..}) <- ask
         (_, CeilometerState{..}) <- get
-        _ <- liftIO $ forkIO $ runCollector parseOptions initState cleanup (consumeSamples inChan)
+        consumerAsync <- liftIO $ async $ runCollector parseOptions initState cleanup (consumeSamples inChan)
+        liftIO $ link consumerAsync
         forever $ do
             msg <- liftIO $ getMsg ceilometerMessageChan Ack rabbitQueue
             case msg of
