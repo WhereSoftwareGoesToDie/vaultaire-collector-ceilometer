@@ -40,7 +40,7 @@ import           Ceilometer.Types
 --   Processes JSON objects from the configured queue and publishes
 --   SimplePoints and SourceDicts to the vault
 runPublisher :: IO ()
-runPublisher = runCollectorNP parseOptions initState cleanup queueSamples consumeSamples
+runPublisher = runCollectorN parseOptions initState cleanup queueSamples
   where
     parseOptions = CeilometerOptions
         <$> (T.pack <$> strOption
@@ -90,14 +90,15 @@ runPublisher = runCollectorNP parseOptions initState cleanup queueSamples consum
         infoM "Ceilometer.Process.initState" "Connected to RabbitMQ server"
         chan <- openChannel conn
         infoM "Ceilometer.Process.initState" "Opened channel"
-        inChan <- atomically newTChan
-        return $ CeilometerState conn chan inChan
+        return $ CeilometerState conn chan
     cleanup = do
-        (_, CeilometerState conn _ _) <- get
+        (_, CeilometerState conn _) <- get
         liftIO $ closeConnection conn
     queueSamples = do
+        inChan <- liftIO $ atomically newTChan
         (_, CeilometerOptions{..}) <- ask
         (_, CeilometerState{..}) <- get
+        _ <- liftIO $ forkIO $ runCollector parseOptions initState cleanup (consumeSamples inChan)
         forever $ do
             msg <- liftIO $ getMsg ceilometerMessageChan Ack rabbitQueue
             case msg of
@@ -106,11 +107,11 @@ runPublisher = runCollectorNP parseOptions initState cleanup queueSamples consum
                         "No message received, sleeping for " <> show rabbitPollPeriod <> " s"
                     threadDelay (1000000 * rabbitPollPeriod)
                 Just msg' -> liftIO $ atomically $ writeTChan inChan msg'     
-    consumeSamples = do
+    consumeSamples chan = do
         (_, CeilometerOptions{..}) <- ask
         (_, CeilometerState{..}) <- get
         forever $ do
-            (msg, env) <- liftIO $ atomically $ readTChan inChan
+            (msg, env) <- liftIO $ atomically $ readTChan chan
             tuples <- processSample $ msgBody msg
             forM_ tuples (\(addr, sd, ts, p) -> do
                 collectSource addr sd

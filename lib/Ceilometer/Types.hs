@@ -75,7 +75,6 @@ data CeilometerOptions = CeilometerOptions
 data CeilometerState = CeilometerState
     { ceilometerMessageConn :: Connection
     , ceilometerMessageChan :: Channel
-    , inChan                :: TChan (Message, Envelope)
     }
 
 type Publisher = Collector CeilometerOptions CeilometerState IO
