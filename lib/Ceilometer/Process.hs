@@ -360,6 +360,8 @@ getInstancePayloads Metric{..} Flavor{..} = do
                 "error"   -> return 0
                 "active"  -> return 1
                 "shutoff" -> return 2
+                "build"   -> return 3
+                "deleted" -> return 4
                 x         -> do
                     alertM "Ceilometer.Process.getInstancePayloads"
                          $ "Invalid status for instance pollster: " <> show x
