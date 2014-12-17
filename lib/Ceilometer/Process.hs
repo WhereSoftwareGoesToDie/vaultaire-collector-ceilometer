@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
-module Ceilometer.Process(runPublisher, processSample, siphash) where
+module Ceilometer.Process(runPublisher, processSample, siphash, siphash32) where
 
 import           Control.Applicative
 import           Control.Concurrent                 hiding (yield)
@@ -230,7 +230,7 @@ isCompound m
     | isEvent m && metricName m == "volume.size"   = True
     | isEvent m && metricName m == "image.size"    = True
     | isEvent m && metricName m == "snapshot.size" = True
-    | isEvent m && metricName m == "instance"      = True
+    |              metricName m == "instance"      = True
     | otherwise                                    = False
 
 -- | Constructs the internal HashMap of a SourceDict for the given Metric
@@ -267,9 +267,9 @@ mapToSourceDict sourceMap = case makeSourceDict sourceMap of
 getIdElements :: Metric -> Text -> [Text]
 getIdElements m@Metric{..} name =
     let base     = [metricProjectId, metricResourceId, metricUOM, metricType, name]
-        event    = if isEvent m then
-                       ["_event", fromJust $ getEventType m]
-                   else []
+        event    = case getEventType m of
+            Just eventType -> ["_event", eventType]
+            Nothing        -> []
         compound = ["_compound" | isCompound m]
     in concat [base,event,compound]
 
@@ -280,6 +280,10 @@ getAddress m name = hashIdentifier $ T.encodeUtf8 $ mconcat $ getIdElements m na
 -- | Canonical siphash with key = 0
 siphash :: S.ByteString -> Word64
 siphash x = let (SipHash h) = hash (SipKey 0 0) x in h
+
+-- | Canonical siphash with key = 0, truncated to 32 bits
+siphash32 :: S.ByteString -> Word64
+siphash32 = (`shift` (-32)) . siphash
 
 -- Pollster based metrics
 
@@ -310,21 +314,71 @@ processInstancePollster m@Metric{..} = do
     sds <- liftIO $ catMaybes <$> forM sourceMaps mapToSourceDict
     --Check if all 4 metrics' sourcedicts successully parsed
     if length sds == 4 then
-        case fromJSON $ fromJust $ H.lookup "flavor" metricMetadata of
-            Error e -> do
-                liftIO $ alertM "Ceilometer.Process.processInstance" $
-                    "Failed to parse flavor sub-object for instance pollster" <> show e
+        case H.lookup "flavor" metricMetadata of
+            Just flavor -> case fromJSON flavor of
+                Error e -> do
+                    liftIO $ alertM "Ceilometer.Process.processInstancePollster" $
+                        "Failed to parse flavor sub-object for instance pollster" <> show e
+                    return []
+                Success f -> do
+                    payloads <- liftIO $ getInstancePayloads m f
+                    case payloads of
+                        Just ps -> return $ zip4 addrs sds (repeat metricTimeStamp) ps
+                        Nothing -> return []
+            Nothing -> do
+                liftIO $ alertM "Ceilometer.Process.processInstancePollster"
+                                "Flavor sub-object missing from instance pollster"
                 return []
-            Success Flavor{..} ->
-                let (String instanceType) = fromJust $ H.lookup "instance_type" metricMetadata
-                    instanceType' = siphash $ T.encodeUtf8 instanceType
-                    diskTotal = instanceDisk + instanceEphemeral
-                    payloads = [instanceVcpus, instanceRam, diskTotal, instanceType']
-                in return (zip4 addrs sds (repeat metricTimeStamp) payloads)
     else do
         liftIO $ alertM "Ceilometer.Process.processInstance"
             "Failure to convert all sourceMaps to SourceDicts for instance pollster"
         return []
+
+-- | Constructs the compound payloads for instance pollsters
+--   Returns Nothing on failure and a list of 4 Word64s, the
+--   instance_vcpus, instance_ram, instance_disk and instance_flavor
+--   compound payloads respectively.
+getInstancePayloads :: Metric -> Flavor -> IO (Maybe [Word64])
+getInstancePayloads Metric{..} Flavor{..} = do
+    st <- case H.lookup "status" metricMetadata of
+        Just (String status) -> return $ Just status
+        Just x -> do
+            alertM "Ceilometer.Process.getInstancePayloads"
+                 $ "Invalid parse of status for instance pollster" <> show x
+            return Nothing
+        Nothing -> do
+            alertM "Ceilometer.Process.getInstancePayloads"
+                   "Status field missing from instance pollster"
+            return Nothing
+    ty <- case H.lookup "instance_type" metricMetadata of
+        Just (String instanceType) -> return $ Just instanceType
+        Just x -> do
+            alertM "Ceilometer.Process.getInstancePayloads"
+                 $ "Invalid parse of instance_type for instance pollster: " <> show x
+            return Nothing
+        Nothing -> do
+            alertM "Ceilometer.Process.getInstancePayloads"
+                   "instance_type field missing from instance pollster"
+            return Nothing
+    case (st, ty) of
+        (Just status, Just instanceType) -> do
+            let instanceType' = siphash32 $ T.encodeUtf8 instanceType
+            let diskTotal = instanceDisk + instanceEphemeral
+            let rawPayloads = [instanceVcpus, instanceRam, diskTotal, instanceType']
+            statusValue <- case status of
+                "error"   -> return 0
+                "active"  -> return 1
+                "shutoff" -> return 2
+                x         -> do
+                    alertM "Ceilometer.Process.getInstancePayloads"
+                         $ "Invalid status for instance pollster: " <> show x
+                    return (-1)
+            return $ if statusValue == (-1) then
+                Nothing
+            else
+                -- Since this is for pollsters, both verbs and endpoints are meaningless
+                Just $ map (constructCompoundPayload statusValue 0 0) rawPayloads
+        _ -> return Nothing
 
 -- Event based metrics
 
@@ -332,7 +386,7 @@ processImageSizeEvent :: Metric -> PublicationData
 processImageSizeEvent = processEvent getImagePayload
 
 processInstanceEvent :: Metric -> PublicationData
-processInstanceEvent m = return [] -- See https://github.com/anchor/vaultaire-collector-ceilometer/issues/4
+processInstanceEvent _ = return [] -- See https://github.com/anchor/vaultaire-collector-ceilometer/issues/4
 
 processVolumeEvent :: Metric -> PublicationData
 processVolumeEvent = processEvent getVolumePayload
@@ -356,74 +410,116 @@ processEvent f m@Metric{..} = do
         -- so this case should not be reached
         _ -> error $ "Impossible control flow reached in processEvent. Given: " ++ show m
 
--- | Constructs the compound payload for ip allocation events
+-- | Constructs the compound payload for image events
 getImagePayload :: Metric -> IO (Maybe Word64)
 getImagePayload m@Metric{..} = do
-    let _:verb:_ = T.splitOn "." $ fromJust $ getEventType m
-    let (String status)  = fromJust $ H.lookup "status" metricMetadata
-    statusValue <- case status of
-        "active"  -> return 1
-        "saving"  -> return 2
-        "deleted" -> return 3
-        x        -> do
-            alertM "Ceilometer.Process.getImagePayload" $
-                "Invalid status for image event: " <> show x
-            return (-1)
-    verbValue <- case verb of
-        "serve"    -> return 1
-        "update"   -> return 2
-        "upload"   -> return 3
-        "download" -> return 4
-        "delete"   -> return 5
-        x          -> do
-            alertM "Ceilometer.Process.getImagePayload" $
-                "Invalid verb for image event: " <> show x
-            return (-1)
-    let endpointValue = 0
-    return $ if (-1) `elem` [statusValue, verbValue, endpointValue] then
-        Nothing
-    else
-        Just $ constructCompoundPayload statusValue verbValue endpointValue ipRawPayload
+    v <- case T.splitOn "." <$> getEventType m of
+        Just (_:verb:_) -> return $ Just verb
+        Just x -> do
+            alertM "Ceilometer.Process.getImagePayload"
+                 $ "Invalid parse of verb for image event" <> show x
+            return Nothing
+        Nothing -> do
+            alertM "Ceilometer.Process.getImagePayload"
+                   "event_type field missing from image event"
+            return Nothing
+    st <- case H.lookup "status" metricMetadata of
+        Just (String status) -> return $ Just status
+        Just x -> do
+            alertM "Ceilometer.Process.getImagePayload"
+                 $ "Invalid parse of status for image event" <> show x
+            return Nothing
+        Nothing -> do
+            alertM "Ceilometer.Process.getImagePayload"
+                   "Status field missing from image event"
+            return Nothing
+    case (v, st) of
+        (Just verb, Just status) -> do
+            statusValue <- case status of
+                "active"  -> return 1
+                "saving"  -> return 2
+                "deleted" -> return 3
+                x        -> do
+                    alertM "Ceilometer.Process.getImagePayload" $
+                           "Invalid status for image event: " <> show x
+                    return (-1)
+            verbValue <- case verb of
+                "serve"    -> return 1
+                "update"   -> return 2
+                "upload"   -> return 3
+                "download" -> return 4
+                "delete"   -> return 5
+                x          -> do
+                    alertM "Ceilometer.Process.getImagePayload" $
+                        "Invalid verb for image event: " <> show x
+                    return (-1)
+            let endpointValue = 0
+            return $ if (-1) `elem` [statusValue, verbValue, endpointValue] then
+                Nothing
+            else
+                Just $ constructCompoundPayload statusValue verbValue endpointValue ipRawPayload
+        _ -> return Nothing
 
 -- | Constructs the compound payload for volume events
 getVolumePayload :: Metric -> IO (Maybe Word64)
 getVolumePayload m@Metric{..} = do
-    let _:verb:endpoint:_ = T.splitOn "." $ fromJust $ getEventType m
-    let (String status)  = fromJust $ H.lookup "status" metricMetadata
-    statusValue <- case status of
-        "error"     -> return 0
-        "available" -> return 1
-        "creating"  -> return 2
-        "extending" -> return 3
-        "deleting"  -> return 4
-        "attaching" -> return 5
-        "detaching" -> return 6
-        "in-use"    -> return 7
-        x           -> do
-            alertM "Ceilometer.Process.getVolumePayload" $
-                "Invalid status for volume event: " <> show x
-            return (-1)
-    verbValue <- case verb of
-        "create" -> return 1
-        "resize" -> return 2
-        "delete" -> return 3
-        "attach" -> return 4
-        "detach" -> return 5
-        x        -> do
-            alertM "Ceilometer.Process.getVolumePayload" $
-                "Invalid verb for volume event: " <> show x
-            return (-1)
-    endpointValue <- case endpoint of
-        "start" -> return 1
-        "end"   -> return 2
-        x       -> do
-            alertM "Ceilometer.Process.getVolumePayload" $
-                "Invalid endpoint for volume event: " <> show x
-            return (-1)
-    return $ if (-1) `elem` [statusValue, verbValue, endpointValue] then
-        Nothing
-    else
-        Just $ constructCompoundPayload statusValue verbValue endpointValue metricPayload
+    components <- case T.splitOn "." <$> getEventType m of
+        Just (_:verb:endpoint:__) -> return $ Just (verb, endpoint)
+        Just x -> do
+            alertM "Ceilometer.Process.getVolumePayload"
+                 $ "Invalid parse of verb + endpoint for volume event" <> show x
+            return Nothing
+        Nothing -> do
+            alertM "Ceilometer.Process.getVolumePayload"
+                   "event_type field missing from volume event"
+            return Nothing
+    st <- case H.lookup "status" metricMetadata of
+        Just (String status) -> return $ Just status
+        Just x -> do
+            alertM "Ceilometer.Process.getVolumePayload"
+                 $ "Invalid parse of status for volume event" <> show x
+            return Nothing
+        Nothing -> do
+            alertM "Ceilometer.Process.getVolumePayload"
+                   "Status field missing from volume event"
+            return Nothing
+    case (components, st) of
+        (Just (verb, endpoint), Just status) -> do
+            statusValue <- case status of
+                "error"     -> return 0
+                "available" -> return 1
+                "creating"  -> return 2
+                "extending" -> return 3
+                "deleting"  -> return 4
+                "attaching" -> return 5
+                "detaching" -> return 6
+                "in-use"    -> return 7
+                x           -> do
+                    alertM "Ceilometer.Process.getVolumePayload" $
+                        "Invalid status for volume event: " <> show x
+                    return (-1)
+            verbValue <- case verb of
+                "create" -> return 1
+                "resize" -> return 2
+                "delete" -> return 3
+                "attach" -> return 4
+                "detach" -> return 5
+                x        -> do
+                    alertM "Ceilometer.Process.getVolumePayload" $
+                        "Invalid verb for volume event: " <> show x
+                    return (-1)
+            endpointValue <- case endpoint of
+                "start" -> return 1
+                "end"   -> return 2
+                x       -> do
+                    alertM "Ceilometer.Process.getVolumePayload" $
+                        "Invalid endpoint for volume event: " <> show x
+                    return (-1)
+            return $ if (-1) `elem` [statusValue, verbValue, endpointValue] then
+                Nothing
+            else
+                Just $ constructCompoundPayload statusValue verbValue endpointValue metricPayload
+        _ -> return Nothing
 
 -- | An allocation has no 'value' per se, so we arbitarily use 1
 ipRawPayload :: Word64
@@ -432,70 +528,103 @@ ipRawPayload = 1
 -- | Constructs the compound payload for ip allocation events
 getIpPayload :: Metric -> IO (Maybe Word64)
 getIpPayload m@Metric{..} = do
-    let _:verb:endpoint:_ = T.splitOn "." $ fromJust $ getEventType m
+    components <- case T.splitOn "." <$> getEventType m of
+        Just (_:verb:endpoint:__) -> return $ Just (verb, endpoint)
+        Just x -> do
+            alertM "Ceilometer.Process.getIpPayload"
+                 $ "Invalid parse of verb + endpoint for ip event" <> show x
+            return Nothing
+        Nothing -> do
+            alertM "Ceilometer.Process.getIpPayload"
+                   "event_type field missing from ip event"
+            return Nothing
     let status = H.lookup "status" metricMetadata
-    statusValue <- case status of
-        Nothing                -> return 0
-        Just Null              -> return 0
-        Just (String "ACTIVE") -> return 1
-        Just (String "DOWN")   -> return 2
-        Just x                 -> do
-            alertM "Ceilometer.Process.getIpPayload" $
-                "Invalid status for ip event: " <> show x
-            return (-1)
-    verbValue <- case verb of
-        "create" -> return 1
-        "update" -> return 2
-        "delete" -> return 3
-        x        -> do
-            alertM "Ceilometer.Process.getIpPayload" $
-                "Invalid verb for ip event: " <> show x
-            return (-1)
-    endpointValue <- case endpoint of
-        "start" -> return 1
-        "end"   -> return 2
-        x       -> do
-            alertM "Ceilometer.Process.getIpPayload" $
-                "Invalid endpoint for ip event: " <> show x
-            return (-1)
-    return $ if (-1) `elem` [statusValue, verbValue, endpointValue] then
-        Nothing
-    else
-        Just $ constructCompoundPayload statusValue verbValue endpointValue ipRawPayload
+    case components of
+        Just (verb, endpoint) -> do
+            statusValue <- case status of
+                Nothing                -> return 0
+                Just Null              -> return 0
+                Just (String "ACTIVE") -> return 1
+                Just (String "DOWN")   -> return 2
+                Just x                 -> do
+                    alertM "Ceilometer.Process.getIpPayload" $
+                        "Invalid status for ip event: " <> show x
+                    return (-1)
+            verbValue <- case verb of
+                "create" -> return 1
+                "update" -> return 2
+                "delete" -> return 3
+                x        -> do
+                    alertM "Ceilometer.Process.getIpPayload" $
+                        "Invalid verb for ip event: " <> show x
+                    return (-1)
+            endpointValue <- case endpoint of
+                "start" -> return 1
+                "end"   -> return 2
+                x       -> do
+                    alertM "Ceilometer.Process.getIpPayload" $
+                        "Invalid endpoint for ip event: " <> show x
+                    return (-1)
+            return $ if (-1) `elem` [statusValue, verbValue, endpointValue] then
+                Nothing
+            else
+                Just $ constructCompoundPayload statusValue verbValue endpointValue ipRawPayload
+        _ -> return Nothing
 
 -- | Constructs the compound payload for ip allocation events
 getSnapshotSizePayload :: Metric -> IO (Maybe Word64)
 getSnapshotSizePayload m@Metric{..} = do
-    let _:verb:endpoint:_ = T.splitOn "." $ fromJust $ getEventType m
-    let (String status)  = fromJust $ H.lookup "status" metricMetadata
-    statusValue <- case status of
-        "error"     -> return 0
-        "available" -> return 1
-        "creating"  -> return 2
-        "deleting"  -> return 3
-        x           -> do
-            alertM "Ceilometer.Process.getSnapshotSizePayload" $
-                "Invalid status for snapshot size event: " <> show x
-            return (-1)
-    verbValue <- case verb of
-        "create" -> return 1
-        "update" -> return 2
-        "delete" -> return 3
-        x        -> do
-            alertM "Ceilometer.Process.getSnapshotSizePayload" $
-                "Invalid verb for snapshot size event: " <> show x
-            return (-1)
-    endpointValue <- case endpoint of
-        "start" -> return 1
-        "end"   -> return 2
-        x       -> do
-            alertM "Ceilometer.Process.getSnapshotSizePayload" $
-                "Invalid endpoint for snapshot size event: " <> show x
-            return (-1)
-    return $ if (-1) `elem` [statusValue, verbValue, endpointValue] then
-        Nothing
-    else
-        Just $ constructCompoundPayload statusValue verbValue endpointValue metricPayload
+    components <- case T.splitOn "." <$> getEventType m of
+        Just (_:verb:endpoint:__) -> return $ Just (verb, endpoint)
+        Just x -> do
+            alertM "Ceilometer.Process.getSnapshotSizePayload"
+                 $ "Invalid parse of verb + endpoint for snapshot size event" <> show x
+            return Nothing
+        Nothing -> do
+            alertM "Ceilometer.Process.getSnapshotSizePayload"
+                   "event_type field missing from snapshot size event"
+            return Nothing
+    st <- case H.lookup "status" metricMetadata of
+        Just (String status) -> return $ Just status
+        Just x -> do
+            alertM "Ceilometer.Process.getSnapshotSizePayload"
+                 $ "Invalid parse of status for snapshot size event" <> show x
+            return Nothing
+        Nothing -> do
+            alertM "Ceilometer.Process.getSnapshotSizePayload"
+                   "Status field missing from snapshot size event"
+            return Nothing
+    case (components, st) of
+        (Just (verb, endpoint), Just status) -> do
+            statusValue <- case status of
+                "error"     -> return 0
+                "available" -> return 1
+                "creating"  -> return 2
+                "deleting"  -> return 3
+                x           -> do
+                    alertM "Ceilometer.Process.getSnapshotSizePayload" $
+                        "Invalid status for snapshot size event: " <> show x
+                    return (-1)
+            verbValue <- case verb of
+                "create" -> return 1
+                "update" -> return 2
+                "delete" -> return 3
+                x        -> do
+                    alertM "Ceilometer.Process.getSnapshotSizePayload" $
+                        "Invalid verb for snapshot size event: " <> show x
+                    return (-1)
+            endpointValue <- case endpoint of
+                "start" -> return 1
+                "end"   -> return 2
+                x       -> do
+                    alertM "Ceilometer.Process.getSnapshotSizePayload" $
+                        "Invalid endpoint for snapshot size event: " <> show x
+                    return (-1)
+            return $ if (-1) `elem` [statusValue, verbValue, endpointValue] then
+                Nothing
+            else
+                Just $ constructCompoundPayload statusValue verbValue endpointValue metricPayload
+        _ -> return Nothing
 
 -- | Constructs a compound payload from components
 constructCompoundPayload :: Word64 -> Word64 -> Word64 -> Word64 -> Word64
