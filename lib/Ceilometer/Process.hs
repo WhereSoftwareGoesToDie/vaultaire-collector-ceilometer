@@ -98,10 +98,11 @@ runPublisher = runCollectorN parseOptions initState cleanup queueSamples
     queueSamples = do
         inChan <- liftIO $ atomically newTChan
         (_, CeilometerOptions{..}) <- ask
-        (_, CeilometerState{..}) <- get
-        consumerAsync <- liftIO $ async $ runCollector parseOptions initState cleanup (consumeSamples inChan)
+        (_, s) <- get
+        consumerAsync <- liftIO $ async $ runCollector parseOptions (\_ -> return s) (return ()) (consumeSamples inChan)
         liftIO $ link consumerAsync
         forever $ do
+            (_, CeilometerState{..}) <- get
             msg <- liftIO $ getMsg ceilometerMessageChan Ack rabbitQueue
             case msg of
                 Nothing   -> liftIO $ do
@@ -111,8 +112,8 @@ runPublisher = runCollectorN parseOptions initState cleanup queueSamples
                 Just msg' -> liftIO $ atomically $ writeTChan inChan msg'     
     consumeSamples chan = do
         (_, CeilometerOptions{..}) <- ask
-        (_, CeilometerState{..}) <- get
         forever $ do
+            (_, CeilometerState{..}) <- get
             (msg, env) <- liftIO $ atomically $ readTChan chan
             tuples <- processSample $ msgBody msg
             forM_ tuples (\(addr, sd, ts, p) -> do
