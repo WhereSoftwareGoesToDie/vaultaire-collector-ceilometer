@@ -504,6 +504,8 @@ getVolumePayload m@Metric{..} = do
                 "attaching" -> return 5
                 "detaching" -> return 6
                 "in-use"    -> return 7
+                "retyping"  -> return 8
+                "uploading" -> return 9
                 x           -> do
                     alertM "Ceilometer.Process.getVolumePayload" $
                         "Invalid status for volume event: " <> show x
