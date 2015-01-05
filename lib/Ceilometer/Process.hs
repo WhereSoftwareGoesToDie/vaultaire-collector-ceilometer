@@ -356,6 +356,9 @@ getInstancePayloads Metric{..} Flavor{..} = do
             let instanceType' = siphash32 $ T.encodeUtf8 instanceType
             let diskTotal = instanceDisk + instanceEphemeral
             let rawPayloads = [instanceVcpus, instanceRam, diskTotal, instanceType']
+            -- These are taken from nova.api.openstack.common in the
+            -- OpenStack Nova codebase.
+            -- FIXME(fractalcat): shouldn't this be an enum?
             statusValue <- case status of
                 "error"             -> return  0
                 "active"            -> return  1
@@ -375,6 +378,7 @@ getInstancePayloads Metric{..} Flavor{..} = do
                 "paused"            -> return 15
                 "suspended"         -> return 16
                 "rescue"            -> return 17
+                "migrating"         -> return 18
                 x                   -> do
                     alertM "Ceilometer.Process.getInstancePayloads"
                          $ "Invalid status for instance pollster: " <> show x
