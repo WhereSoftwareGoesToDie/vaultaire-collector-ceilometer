@@ -320,6 +320,7 @@ suite = do
         it "Processes cpu usage pollsters" testCpu
         it "Processes image size pollsters" testImagePollster
         it "Processes snapshot size events" testSnapshot
+        it "Processes image size events with nulls" testImageSizeNulls
     describe "Ignoring Unsupported Metrics" $ do
         it "Ignores disk read/write requests pollsters" testIgnoreDiskRequests
         it "Ignores specifically sized instance pollsters" testIgnoreSizedInstances
@@ -502,3 +503,10 @@ testTimeStamp = do
     basic2 @?= (Just $ TimeStamp 0)
     tz1    @?= (Just $ TimeStamp (7200*10^9))
     tz2    @?= (Just $ TimeStamp (732366000*10^9))
+
+testImageSizeNulls :: IO ()
+testImageSizeNulls = runTestPublisher $ do
+    rawJSON <- liftIO $ BSL.readFile "test/json_files/image_size_with_nulls.json"
+    -- We will throw an exception here
+    processed <- processSample rawJSON
+    liftIO $ length processed @?= 1
