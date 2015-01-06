@@ -114,7 +114,7 @@ runPublisher = runCollectorN parseOptions initState cleanup publishSamples
 processSample :: L.ByteString -> PublicationData
 processSample bs =
     case eitherDecode bs of
-        Left e             -> do
+        Left e  -> do
             liftIO $ alertM "Ceilometer.Process.processSample" $
                 "Failed to parse: " <> L.unpack bs <> " Error: " <> e
             return []
@@ -285,7 +285,9 @@ processBasePollster m@Metric{..} = do
     case sd of
         Just sd' -> do
             let addr = getAddress m metricName
-            return [(addr, sd', metricTimeStamp, metricPayload)]
+            return $ case metricPayload of
+                Just p  -> [(addr, sd', metricTimeStamp, p)]
+                Nothing -> []
         Nothing -> return []
 
 -- | Extracts vcpu, ram, disk and flavor data from an instance pollster
@@ -529,8 +531,9 @@ getVolumePayload m@Metric{..} = do
                     return (-1)
             return $ if (-1) `elem` [statusValue, verbValue, endpointValue] then
                 Nothing
-            else
-                Just $ constructCompoundPayload statusValue verbValue endpointValue metricPayload
+            else case metricPayload of
+                    Just p -> Just $ constructCompoundPayload statusValue verbValue endpointValue p
+                    Nothing -> Nothing
         _ -> return Nothing
 
 -- | An allocation has no 'value' per se, so we arbitarily use 1
@@ -634,8 +637,9 @@ getSnapshotSizePayload m@Metric{..} = do
                     return (-1)
             return $ if (-1) `elem` [statusValue, verbValue, endpointValue] then
                 Nothing
-            else
-                Just $ constructCompoundPayload statusValue verbValue endpointValue metricPayload
+            else case metricPayload of
+                Just p -> Just $ constructCompoundPayload statusValue verbValue endpointValue p
+                Nothing -> Nothing
         _ -> return Nothing
 
 -- | Constructs a compound payload from components

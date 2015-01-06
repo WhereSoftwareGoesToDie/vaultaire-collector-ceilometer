@@ -46,7 +46,7 @@ data Metric = Metric
     { metricName       :: Text
     , metricType       :: Text
     , metricUOM        :: Text
-    , metricPayload    :: Word64
+    , metricPayload    :: Maybe Word64
     , metricProjectId  :: Text
     , metricResourceId :: Text
     , metricTimeStamp  :: TimeStamp
