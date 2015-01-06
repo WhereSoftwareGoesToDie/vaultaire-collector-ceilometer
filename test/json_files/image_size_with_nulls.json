@@ -2,7 +2,7 @@
     "id": "foo",
     "name": "image.size",
     "project_id": "bar",
-    "resourcce_metadata": {
+    "resource_metadata": {
         "checksum": null,
         "container_format": "bare",
         "created_at": "2014-12-23T04:37:02",

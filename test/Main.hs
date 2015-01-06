@@ -504,9 +504,10 @@ testTimeStamp = do
     tz1    @?= (Just $ TimeStamp (7200*10^9))
     tz2    @?= (Just $ TimeStamp (732366000*10^9))
 
+-- |Make sure we can parse messages with null payloads without erroring.
+--  We don't expect any points to be returned from parsing these.
 testImageSizeNulls :: IO ()
 testImageSizeNulls = runTestPublisher $ do
     rawJSON <- liftIO $ BSL.readFile "test/json_files/image_size_with_nulls.json"
-    -- We will throw an exception here
     processed <- processSample rawJSON
-    liftIO $ length processed @?= 1
+    liftIO $ length processed @?= 0
