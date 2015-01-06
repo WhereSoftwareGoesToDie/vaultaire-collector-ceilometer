@@ -285,10 +285,9 @@ processBasePollster m@Metric{..} = do
     case sd of
         Just sd' -> do
             let addr = getAddress m metricName
-            return $
-                case metricPayload of
-                    Just p  -> [(addr, sd', metricTimeStamp, p)]
-                    Nothing -> []
+            return $ case metricPayload of
+                Just p  -> [(addr, sd', metricTimeStamp, p)]
+                Nothing -> []
         Nothing -> return []
 
 -- | Extracts vcpu, ram, disk and flavor data from an instance pollster
