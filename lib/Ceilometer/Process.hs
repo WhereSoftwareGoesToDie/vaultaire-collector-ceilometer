@@ -415,12 +415,15 @@ processEvent f m@Metric{..} = do
     p  <- liftIO $ f m
     sd <- liftIO $ mapToSourceDict $ getSourceMap m
     let addr = getAddress m metricName
-    return $ case (p, sd) of
-        (Just compoundPayload, Just sd') ->
-            [(addr, sd', metricTimeStamp, compoundPayload)]
+    case liftM2 (,) p sd of
+        Just (compoundPayload, sd') ->
+            return [(addr, sd', metricTimeStamp, compoundPayload)]
         -- Sub functions will alert, alerts cause termination by default
         -- so this case should not be reached
-        _ -> error $ "Impossible control flow reached in processEvent. Given: " ++ show m
+        Nothing -> do
+            liftIO $ errorM "Ceilometer.Process.processEvent" $
+                            "Impossible control flow reached in processEvent. Given: " ++ show m
+            return []
 
 -- | Constructs the compound payload for image events
 getImagePayload :: Metric -> IO (Maybe Word64)
