@@ -1,5 +1,5 @@
 name:                vaultaire-collector-ceilometer
-version:             0.2.2
+version:             0.2.3
 synopsis:            Vaultaire Collector for Ceilometer
 homepage:            https://github.com/anchor/vaultaire-collector-ceilometer
 license:             BSD3
