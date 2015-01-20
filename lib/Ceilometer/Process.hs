@@ -213,7 +213,8 @@ isEvent m = H.member "event_type" $ metricMetadata m
 getEventType :: Metric -> Maybe Text
 getEventType m = case H.lookup "event_type" $ metricMetadata m of
     Just (String x) -> Just x
-    _               -> Nothing
+    Just _          -> Nothing
+    Nothing         -> Nothing
 
 isCompound :: Metric -> Bool
 isCompound m
@@ -238,10 +239,12 @@ getSourceMap m@Metric{..} =
                ]
         displayName = case H.lookup "display_name" metricMetadata of
             Just (String x) -> [("display_name", x)]
-            _               -> []
+            Just _          -> []
+            Nothing         -> []
         volumeType = case H.lookup "volume_type" metricMetadata of
             Just (String x) -> [("volume_type", x)]
-            _               -> []
+            Just _          -> []
+            Nothing         -> []
         counter = [("_counter", "1") | metricType == "cumulative"]
     in H.fromList $ counter <> base <> displayName <> volumeType
 
@@ -353,8 +356,8 @@ getInstancePayloads Metric{..} Flavor{..} = do
             alertM "Ceilometer.Process.getInstancePayloads"
                    "instance_type field missing from instance pollster"
             return Nothing
-    case (st, ty) of
-        (Just status, Just instanceType) -> do
+    case liftM2 (,) st ty of
+        Just (status, instanceType) -> do
             let instanceType' = siphash32 $ T.encodeUtf8 instanceType
             let diskTotal = instanceDisk + instanceEphemeral
             let rawPayloads = [instanceVcpus, instanceRam, diskTotal, instanceType']
@@ -390,7 +393,7 @@ getInstancePayloads Metric{..} Flavor{..} = do
             else
                 -- Since this is for pollsters, both verbs and endpoints are meaningless
                 Just $ map (constructCompoundPayload statusValue 0 0) rawPayloads
-        _ -> return Nothing
+        Nothing -> return Nothing
 
 -- Event based metrics
 
@@ -415,12 +418,15 @@ processEvent f m@Metric{..} = do
     p  <- liftIO $ f m
     sd <- liftIO $ mapToSourceDict $ getSourceMap m
     let addr = getAddress m metricName
-    return $ case (p, sd) of
-        (Just compoundPayload, Just sd') ->
-            [(addr, sd', metricTimeStamp, compoundPayload)]
+    case liftM2 (,) p sd of
+        Just (compoundPayload, sd') ->
+            return [(addr, sd', metricTimeStamp, compoundPayload)]
         -- Sub functions will alert, alerts cause termination by default
         -- so this case should not be reached
-        _ -> error $ "Impossible control flow reached in processEvent. Given: " ++ show m
+        Nothing -> do
+            liftIO $ errorM "Ceilometer.Process.processEvent" $
+                            "Impossible control flow reached in processEvent. Given: " ++ show m
+            return []
 
 -- | Constructs the compound payload for image events
 getImagePayload :: Metric -> IO (Maybe Word64)
@@ -445,8 +451,8 @@ getImagePayload m@Metric{..} = do
             alertM "Ceilometer.Process.getImagePayload"
                    "Status field missing from image event"
             return Nothing
-    case (v, st) of
-        (Just verb, Just status) -> do
+    case liftM2 (,) v st of
+        Just (verb, status) -> do
             statusValue <- case status of
                 "active"         -> return 1
                 "saving"         -> return 2
@@ -473,7 +479,7 @@ getImagePayload m@Metric{..} = do
                 Nothing
             else
                 Just $ constructCompoundPayload statusValue verbValue endpointValue ipRawPayload
-        _ -> return Nothing
+        Nothing -> return Nothing
 
 -- | Constructs the compound payload for volume events
 getVolumePayload :: Metric -> IO (Maybe Word64)
@@ -498,8 +504,8 @@ getVolumePayload m@Metric{..} = do
             alertM "Ceilometer.Process.getVolumePayload"
                    "Status field missing from volume event"
             return Nothing
-    case (components, st) of
-        (Just (verb, endpoint), Just status) -> do
+    case liftM2 (,) components st of
+        Just ((verb, endpoint), status) -> do
             statusValue <- case status of
                 "error"     -> return 0
                 "available" -> return 1
@@ -538,7 +544,7 @@ getVolumePayload m@Metric{..} = do
             else case metricPayload of
                     Just p -> Just $ constructCompoundPayload statusValue verbValue endpointValue p
                     Nothing -> Nothing
-        _ -> return Nothing
+        Nothing -> return Nothing
 
 -- | An allocation has no 'value' per se, so we arbitarily use 1
 ipRawPayload :: Word64
@@ -548,7 +554,7 @@ ipRawPayload = 1
 getIpPayload :: Metric -> IO (Maybe Word64)
 getIpPayload m@Metric{..} = do
     components <- case T.splitOn "." <$> getEventType m of
-        Just (_:verb:endpoint:__) -> return $ Just (verb, endpoint)
+        Just (_:verb:endpoint:_) -> return $ Just (verb, endpoint)
         Just x -> do
             alertM "Ceilometer.Process.getIpPayload"
                  $ "Invalid parse of verb + endpoint for ip event" <> show x
@@ -588,7 +594,7 @@ getIpPayload m@Metric{..} = do
                 Nothing
             else
                 Just $ constructCompoundPayload statusValue verbValue endpointValue ipRawPayload
-        _ -> return Nothing
+        Nothing -> return Nothing
 
 -- | Constructs the compound payload for ip allocation events
 getSnapshotSizePayload :: Metric -> IO (Maybe Word64)
@@ -613,8 +619,8 @@ getSnapshotSizePayload m@Metric{..} = do
             alertM "Ceilometer.Process.getSnapshotSizePayload"
                    "Status field missing from snapshot size event"
             return Nothing
-    case (components, st) of
-        (Just (verb, endpoint), Just status) -> do
+    case liftM2 (,) components st of
+        Just ((verb, endpoint), status) -> do
             statusValue <- case status of
                 "error"     -> return 0
                 "available" -> return 1
@@ -644,7 +650,7 @@ getSnapshotSizePayload m@Metric{..} = do
             else case metricPayload of
                 Just p -> Just $ constructCompoundPayload statusValue verbValue endpointValue p
                 Nothing -> Nothing
-        _ -> return Nothing
+        Nothing -> return Nothing
 
 -- | Constructs a compound payload from components
 constructCompoundPayload :: Word64 -> Word64 -> Word64 -> Word64 -> Word64
