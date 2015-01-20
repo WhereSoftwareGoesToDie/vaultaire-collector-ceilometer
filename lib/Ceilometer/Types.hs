@@ -4,6 +4,7 @@
 module Ceilometer.Types where
 
 import           Control.Applicative
+import           Control.Concurrent.STM.TChan
 import           Control.Monad
 import           Data.Aeson
 import           Data.Aeson.Types

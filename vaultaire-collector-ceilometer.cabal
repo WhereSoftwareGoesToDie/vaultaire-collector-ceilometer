@@ -20,6 +20,7 @@ library
 
   build-depends:     base >=4.7 && <4.8,
                      aeson,
+                     async,
                      text,
                      bytestring,
                      hslogger,
@@ -33,7 +34,8 @@ library
                      old-locale,
                      mtl,
                      vaultaire-collector-common >= 0.3.0,
-                     vaultaire-common
+                     vaultaire-common,
+                     stm
 
   ghc-options:       -O2
                      -threaded
