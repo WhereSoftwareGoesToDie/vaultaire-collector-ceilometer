@@ -448,9 +448,12 @@ getImagePayload m@Metric{..} = do
     case (v, st) of
         (Just verb, Just status) -> do
             statusValue <- case status of
-                "active"  -> return 1
-                "saving"  -> return 2
-                "deleted" -> return 3
+                "active"         -> return 1
+                "saving"         -> return 2
+                "deleted"        -> return 3
+                "queued"         -> return 4
+                "pending_delete" -> return 5
+                "killed"         -> return 6
                 x        -> do
                     alertM "Ceilometer.Process.getImagePayload" $
                            "Invalid status for image event: " <> show x
@@ -518,6 +521,7 @@ getVolumePayload m@Metric{..} = do
                 "delete" -> return 3
                 "attach" -> return 4
                 "detach" -> return 5
+                "update" -> return 6
                 x        -> do
                     alertM "Ceilometer.Process.getVolumePayload" $
                         "Invalid verb for volume event: " <> show x
