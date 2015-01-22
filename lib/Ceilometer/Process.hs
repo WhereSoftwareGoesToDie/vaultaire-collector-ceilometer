@@ -1,7 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
-module Ceilometer.Process(runPublisher, processSample, siphash, siphash32) where
+module Ceilometer.Process( processSample
+                         , runErrorPublisher
+                         , runPublisher
+                         , siphash
+                         , siphash32) where
 
 import           Control.Applicative
 import           Control.Concurrent                 hiding (yield)
@@ -11,6 +15,7 @@ import           Control.Monad.State
 import           Crypto.MAC.SipHash                 (SipHash (..), SipKey (..),
                                                      hash)
 import           Data.Aeson
+import qualified Data.Aeson.Encode                  as E
 import           Data.Bits
 import qualified Data.ByteString                    as S
 import qualified Data.ByteString.Lazy.Char8         as L
@@ -31,8 +36,73 @@ import           System.Log.Logger
 
 import           Marquise.Client
 import           Vaultaire.Collector.Common.Process
+import           Vaultaire.Collector.Common.Types
 
 import           Ceilometer.Types
+
+parseOptions :: Parser CeilometerOptions
+parseOptions = CeilometerOptions
+    <$> (T.pack <$> strOption
+        (long "rabbit-login"
+         <> short 'u'
+         <> metavar "USERNAME"
+         <> help "RabbitMQ username"))
+    <*> (T.pack <$> strOption
+        (long "rabbit-virtual-host"
+         <> short 'r'
+         <> metavar "VIRTUAL_HOSTNAME"
+         <> value "/"
+         <> help "RabbitMQ virtual host"))
+    <*> strOption
+        (long "rabbit-host"
+         <> short 'H'
+         <> metavar "HOSTNAME"
+         <> help "RabbitMQ host")
+    <*> option auto
+        (long "rabbit-port"
+         <> short 'p'
+         <> value 5672
+         <> metavar "PORT"
+         <> help "RabbitMQ port")
+    <*> switch
+        (long "rabbit-ha"
+         <> short 'a'
+         <> help "Use highly available queues for RabbitMQ")
+    <*> switch
+        (long "rabbit-ssl"
+        <> short 's'
+        <> help "Use SSL for RabbitMQ")
+    <*> (T.pack <$> strOption
+        (long "rabbit-queue"
+         <> short 'q'
+         <> value "metering"
+         <> metavar "QUEUE"
+         <> help "RabbitMQ queue"))
+    <*> option auto
+        (long "poll-period"
+         <> short 't'
+         <> value 5
+         <> metavar "POLL-PERIOD"
+         <> help "Time to wait (in seconds) before re-querying empty queue.")
+    <*> strOption
+        (long "password-file"
+         <> short 'f'
+         <> metavar "PASSWORD-FILE"
+         <> help "File containing the password to use for RabbitMQ")
+
+initState :: CollectorOpts CeilometerOptions -> IO CeilometerState
+initState (_, CeilometerOptions{..}) = do
+     password <- withFile rabbitPasswordFile ReadMode T.hGetLine
+     conn <- openConnection' rabbitHost (fromInteger rabbitPort) rabbitVHost rabbitLogin password
+     infoM "Ceilometer.Process.initState" "Connected to RabbitMQ server"
+     chan <- openChannel conn
+     infoM "Ceilometer.Process.initState" "Opened channel"
+     return $ CeilometerState conn chan
+
+cleanup :: Publisher ()
+cleanup = do
+    (_, CeilometerState conn _ ) <- get
+    liftIO $ closeConnection conn
 
 -- | Core entry point for Ceilometer.Process
 --   Processes JSON objects from the configured queue and publishes
@@ -40,58 +110,6 @@ import           Ceilometer.Types
 runPublisher :: IO ()
 runPublisher = runCollectorN parseOptions initState cleanup publishSamples
   where
-    parseOptions = CeilometerOptions
-        <$> (T.pack <$> strOption
-            (long "rabbit-login"
-             <> short 'u'
-             <> metavar "USERNAME"
-             <> help "RabbitMQ username"))
-        <*> (T.pack <$> strOption
-            (long "rabbit-virtual-host"
-             <> short 'r'
-             <> metavar "VIRTUAL_HOSTNAME"
-             <> value "/"
-             <> help "RabbitMQ virtual host"))
-        <*> strOption
-            (long "rabbit-host"
-             <> short 'h'
-             <> metavar "HOSTNAME"
-             <> help "RabbitMQ host")
-        <*> switch
-            (long "rabbit-ha"
-             <> short 'a'
-             <> help "Use highly available queues for RabbitMQ")
-        <*> switch
-            (long "rabbit-ssl"
-            <> short 's'
-            <> help "Use SSL for RabbitMQ")
-        <*> (T.pack <$> strOption
-            (long "rabbit-queue"
-             <> short 'q'
-             <> value "metering"
-             <> metavar "QUEUE"
-             <> help "RabbitMQ queue"))
-        <*> option auto
-            (long "poll-period"
-             <> short 'p'
-             <> value 5
-             <> metavar "POLL-PERIOD"
-             <> help "Time to wait (in seconds) before re-querying empty queue.")
-        <*> strOption
-            (long "password-file"
-             <> short 'f'
-             <> metavar "PASSWORD-FILE"
-             <> help "File containing the password to use for RabbitMQ")
-    initState (_, CeilometerOptions{..}) = do
-        password <- withFile rabbitPasswordFile ReadMode T.hGetLine
-        conn <- openConnection rabbitHost rabbitVHost rabbitLogin password
-        infoM "Ceilometer.Process.initState" "Connected to RabbitMQ server"
-        chan <- openChannel conn
-        infoM "Ceilometer.Process.initState" "Opened channel"
-        return $ CeilometerState conn chan
-    cleanup = do
-        (_, CeilometerState conn _ ) <- get
-        liftIO $ closeConnection conn
     publishSamples = do
         (_, CeilometerOptions{..}) <- ask
         (_, CeilometerState{..}) <- get
@@ -108,6 +126,35 @@ runPublisher = runCollectorN parseOptions initState cleanup publishSamples
                         collectSource addr sd
                         collectSimple (SimplePoint addr ts p))
                     liftIO $ ackEnv env
+
+runErrorPublisher :: IO ()
+runErrorPublisher = runCollector parseOptions initState cleanup publishErrors
+  where
+    publishErrors = do
+        (_, CeilometerOptions{..}) <- ask
+        (_, CeilometerState{..}) <- get
+        forever $ do
+            msg <- liftIO $ getMsg ceilometerMessageChan Ack rabbitQueue
+            case msg of
+                Nothing          -> liftIO $ do
+                    infoM "Ceilometer.Process.publishErrors" $
+                        "No message received, sleeping for " <> show rabbitPollPeriod <> " s"
+                    threadDelay (1000000 * rabbitPollPeriod)
+                Just (msg', env) ->
+                    processError (msgBody msg') env
+    processError bs env = case eitherDecode bs of
+        Left e ->
+            liftIO $ alertM "Ceilometer.Process.publishErrors" $
+                            "Failed to parse: " <> L.unpack bs <> " Error: " <> e
+        Right ErrorMessage{..} -> do
+            let addr = hashIdentifier $ T.encodeUtf8 errorPublisher
+            sd <- liftIO $ mapToSourceDict $ H.singleton "publisher_id" errorPublisher
+            case sd of
+                Just sd' -> do
+                    collectSource addr sd'
+                    collectExtended (ExtendedPoint addr errorTimeStamp (mconcat $ L.toChunks bs))
+                    liftIO $ ackEnv env
+                Nothing -> return ()
 
 -- | Takes in a JSON Object and processes it into a list of
 --   (Address, SourceDict, TimeStamp, Payload) tuples

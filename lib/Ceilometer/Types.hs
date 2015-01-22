@@ -53,6 +53,11 @@ data Metric = Metric
     , metricMetadata   :: HashMap Text Value
     } deriving Show
 
+data ErrorMessage = ErrorMessage
+    { errorPublisher :: Text
+    , errorTimeStamp :: TimeStamp
+    } deriving Show
+
 data Flavor = Flavor
     { instanceVcpus     :: Word64
     , instanceRam       :: Word64
@@ -64,6 +69,7 @@ data CeilometerOptions = CeilometerOptions
     { rabbitLogin        :: Text
     , rabbitVHost        :: Text
     , rabbitHost         :: String
+    , rabbitPort         :: Integer
     , rabbitHa           :: Bool
     , rabbitUseSSL       :: Bool
     , rabbitQueue        :: Text
@@ -91,6 +97,12 @@ instance FromJSON Metric where
         <*> s .: "timestamp"
         <*> s .: "resource_metadata"
     parseJSON o = error $ "Cannot parse metrics from non-objects. Given: " ++ show o
+
+instance FromJSON ErrorMessage where
+    parseJSON (Object s) = ErrorMessage
+        <$> s .: "publisher_id"
+        <*> s .: "timestamp"
+    parseJSON o = error $ "Cannot parse error message from non-objects. Given: " ++ show o
 
 instance FromJSON Flavor where
     parseJSON (Object s) = Flavor
