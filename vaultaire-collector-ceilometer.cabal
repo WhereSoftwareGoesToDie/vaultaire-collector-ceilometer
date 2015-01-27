@@ -1,5 +1,5 @@
 name:                vaultaire-collector-ceilometer
-version:             0.3.0
+version:             0.4.0
 synopsis:            Vaultaire Collectors for Openstack/Ceilometer
 description:         Provides two collectors for openstack/ceilometer.
                      vaultaire-collector-ceilometer collects metric data from
@@ -40,6 +40,7 @@ library
                      optparse-applicative,
                      time,
                      old-locale,
+                     bifunctors,
                      mtl,
                      vaultaire-collector-common >= 0.4.0,
                      vaultaire-common
@@ -99,6 +100,7 @@ test-suite           tests
                      QuickCheck,
                      bytestring,
                      text,
+                     amqp,
                      --required for conduit
                      monad-control >= 0.3.1 && < 0.4,                     
                      unordered-containers,

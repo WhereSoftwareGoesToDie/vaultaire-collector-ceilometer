@@ -1,0 +1,35 @@
+{
+    "_context_roles": [
+        "pony",
+        "unicorn"
+    ],
+    "_context_request_id": "req-magic",
+    "event_type": "not.enough.monads.error",
+    "_context_service_catalog": [
+        {
+            "endpoints": [ ],
+            "endpoints_links": [ ],
+            "type": "monad",
+            "name": "curry"
+        }
+    ],
+    "timestamp": "1970-01-01 00:00:00.000000",
+    "_context_user": "haskell",
+    "_unique_id": "mu",
+    "_context_instance_lock_checked": false,
+    "_context_user_id": "aleph",
+    "payload": {
+        "state_description": "functoring",
+        "code": 999,
+        "message": "ran out of monad while trying to functor the categories",
+        "display_name": "⚓",
+        "hostname": "foo",
+        "state": "functoring",
+        "progress": ""
+    },
+    "_context_project_name": "the real slim shady",
+    "_would_the_real_slim_shady_please_stand_up": "no",
+    "priority": "SUPER_URGENT_CANT_EVEN",
+    "publisher_id": "magic.monad.net.au",
+    "message_id": "abcd"
+}

@@ -2,10 +2,14 @@
 {-# LANGUAGE RecordWildCards   #-}
 
 module Ceilometer.Process( processSample
+                         , processError
+                         , retrieveMessage
                          , runErrorPublisher
                          , runPublisher
                          , siphash
-                         , siphash32) where
+                         , siphash32
+                         , initState
+                         , cleanup) where
 
 import           Control.Applicative
 import           Control.Concurrent                 hiding (yield)
@@ -15,7 +19,7 @@ import           Control.Monad.State
 import           Crypto.MAC.SipHash                 (SipHash (..), SipKey (..),
                                                      hash)
 import           Data.Aeson
-import qualified Data.Aeson.Encode                  as E
+import           Data.Bifunctor
 import           Data.Bits
 import qualified Data.ByteString                    as S
 import qualified Data.ByteString.Lazy.Char8         as L
@@ -114,17 +118,15 @@ runPublisher = runCollectorN parseOptions initState cleanup publishSamples
         (_, CeilometerOptions{..}) <- ask
         (_, CeilometerState{..}) <- get
         forever $ do
-            msg <- liftIO $ getMsg ceilometerMessageChan Ack rabbitQueue
+            msg <- retrieveMessage
             case msg of
-                Nothing          -> liftIO $ do
+                Nothing -> liftIO $ do
                     infoM "Ceilometer.Process.publishSamples" $
                         "No message received, sleeping for " <> show rabbitPollPeriod <> " s"
                     threadDelay (1000000 * rabbitPollPeriod)
                 Just (msg', env) -> do
-                    tuples <- processSample $ msgBody msg'
-                    forM_ tuples (\(addr, sd, ts, p) -> do
-                        collectSource addr sd
-                        collectSimple (SimplePoint addr ts p))
+                    tuples <- processSample msg'
+                    forM_ tuples collectData
                     liftIO $ ackEnv env
 
 runErrorPublisher :: IO ()
@@ -134,27 +136,49 @@ runErrorPublisher = runCollector parseOptions initState cleanup publishErrors
         (_, CeilometerOptions{..}) <- ask
         (_, CeilometerState{..}) <- get
         forever $ do
-            msg <- liftIO $ getMsg ceilometerMessageChan Ack rabbitQueue
+            msg <- retrieveMessage
             case msg of
                 Nothing          -> liftIO $ do
                     infoM "Ceilometer.Process.publishErrors" $
                         "No message received, sleeping for " <> show rabbitPollPeriod <> " s"
                     threadDelay (1000000 * rabbitPollPeriod)
-                Just (msg', env) ->
-                    processError (msgBody msg') env
-    processError bs env = case eitherDecode bs of
-        Left e ->
-            liftIO $ alertM "Ceilometer.Process.publishErrors" $
-                            "Failed to parse: " <> L.unpack bs <> " Error: " <> e
-        Right ErrorMessage{..} -> do
-            let addr = hashIdentifier $ T.encodeUtf8 errorPublisher
-            sd <- liftIO $ mapToSourceDict $ H.singleton "publisher_id" errorPublisher
-            case sd of
-                Just sd' -> do
-                    collectSource addr sd'
-                    collectExtended (ExtendedPoint addr errorTimeStamp (mconcat $ L.toChunks bs))
+                Just (msg', env) -> do
+                    processed <- processError msg'
+                    case processed of
+                        Just x  -> collectError x
+                        Nothing -> return ()
                     liftIO $ ackEnv env
-                Nothing -> return ()
+
+retrieveMessage :: Publisher (Maybe (L.ByteString, Envelope))
+retrieveMessage = do
+    (_, CeilometerOptions{..}) <- ask
+    (_, CeilometerState{..}) <- get
+    liftIO $ fmap (first msgBody) <$> getMsg ceilometerMessageChan Ack rabbitQueue
+
+collectData :: (Address, SourceDict, TimeStamp, Word64) -> Publisher ()
+collectData (addr, sd, ts, p) = do
+    collectSource addr sd
+    collectSimple (SimplePoint addr ts p)
+
+collectError :: (Address, SourceDict, TimeStamp, S.ByteString) -> Publisher ()
+collectError (addr, sd, ts, p) = do
+    collectSource addr sd
+    collectExtended (ExtendedPoint addr ts p)
+
+processError :: L.ByteString -> Publisher (Maybe (Address, SourceDict, TimeStamp, S.ByteString))
+processError bs = case eitherDecode bs of
+    Left e -> do
+        liftIO $ alertM "Ceilometer.Process.publishErrors" $
+                        "Failed to parse: " <> L.unpack bs <> " Error: " <> e
+        return Nothing
+    Right ErrorMessage{..} -> do
+        let addr = hashIdentifier $ T.encodeUtf8 errorPublisher
+        let sdPairs = [ ("publisher_id", errorPublisher)
+                      , ("_os_error", "1") ]
+        sd <- liftIO $ mapToSourceDict $ H.fromList sdPairs
+        return $ case sd of
+            Just sd' -> Just (addr, sd', errorTimeStamp, mconcat $ L.toChunks bs)
+            Nothing  -> Nothing
 
 -- | Takes in a JSON Object and processes it into a list of
 --   (Address, SourceDict, TimeStamp, Payload) tuples
