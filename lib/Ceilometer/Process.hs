@@ -96,7 +96,7 @@ parseOptions = CeilometerOptions
 
 initState :: CollectorOpts CeilometerOptions -> IO CeilometerState
 initState (_, CeilometerOptions{..}) = do
-     password <- withFile rabbitPasswordFile ReadMode T.hGetLine
+     password <- T.strip <$> withFile rabbitPasswordFile ReadMode T.hGetContents
      conn <- openConnection' rabbitHost (fromInteger rabbitPort) rabbitVHost rabbitLogin password
      infoM "Ceilometer.Process.initState" "Connected to RabbitMQ server"
      chan <- openChannel conn
