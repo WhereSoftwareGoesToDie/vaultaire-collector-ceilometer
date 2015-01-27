@@ -17,7 +17,8 @@ import           Data.Word
 import           Network.AMQP
 import           System.Locale
 
-import           Vaultaire.Collector.Common.Types
+import           Vaultaire.Collector.Common.Types hiding (Collector)
+import qualified Vaultaire.Collector.Common.Types as V (Collector)
 import           Vaultaire.Types
 
 newtype CeilometerTime = CeilometerTime UTCTime
@@ -82,9 +83,9 @@ data CeilometerState = CeilometerState
     , ceilometerMessageChan :: Channel
     }
 
-type Publisher = Collector CeilometerOptions CeilometerState IO
+type Collector = V.Collector CeilometerOptions CeilometerState IO
 
-type PublicationData = Publisher [(Address, SourceDict, TimeStamp, Word64)]
+type PublicationData = Collector [(Address, SourceDict, TimeStamp, Word64)]
 
 instance FromJSON Metric where
     parseJSON (Object s) = Metric

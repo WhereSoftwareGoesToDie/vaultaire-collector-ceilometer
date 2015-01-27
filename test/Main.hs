@@ -22,22 +22,25 @@ import           Network.AMQP
 import           Test.Hspec
 import           Test.HUnit.Base
 
-import           Vaultaire.Collector.Common.Process
+import           Vaultaire.Collector.Common.Process hiding (runCollector,
+                                                     runNullCollector)
+import qualified Vaultaire.Collector.Common.Process as V (runCollector,
+                                                          runNullCollector)
 import           Vaultaire.Types
 
 import           Ceilometer.Process
 import           Ceilometer.Types
 
 -- Convenience run function
-runNullPublisher :: Publisher a -> IO a
-runNullPublisher = runNullCollector (pure $ CeilometerOptions "" "" "" 9999 True True "" 0 "") (\_ -> return $ CeilometerState undefined undefined) (return ())
+runNullCollector :: Collector a -> IO a
+runNullCollector = V.runNullCollector (pure $ CeilometerOptions "" "" "" 9999 True True "" 0 "") (\_ -> return $ CeilometerState undefined undefined) (return ())
 
 -- Convenience options with default RabbitMQ settings
 testOptions :: Text -> CeilometerOptions
 testOptions queue = CeilometerOptions "guest" "/" "localhost" 5672 True True queue 0 "test_secret"
 
 -- Additional cleanup for test publishers
-testCleanup :: Text -> Publisher ()
+testCleanup :: Text -> Collector ()
 testCleanup exchange = do
     (_, CeilometerOptions{..}) <- ask
     (_, CeilometerState{..}) <- get
@@ -45,9 +48,9 @@ testCleanup exchange = do
     liftIO $ void $ deleteQueue ceilometerMessageChan rabbitQueue
 
 -- Convenience run function with RabbitMQ
-runIntegrationPublisher :: Text -> Text -> Publisher a -> IO a
-runIntegrationPublisher exchange queue =
-    runCollector (pure $ testOptions queue) initState (testCleanup exchange >> cleanup)
+runIntegrationCollector :: Text -> Text -> Collector a -> IO a
+runIntegrationCollector exchange queue =
+    V.runCollector (pure $ testOptions queue) initState (testCleanup exchange >> cleanup)
 
 -- Volume Events
 expectedVolumePayload :: Word64
@@ -371,7 +374,7 @@ testMetricIntegration :: IO ()
 testMetricIntegration = do
     rawJSON <- BSL.readFile "test/json_files/volume.json"
     let testExchange = "metric-test-exchange"
-    runIntegrationPublisher testExchange "metric-test-queue" $ do
+    runIntegrationCollector testExchange "metric-test-queue" $ do
         (_, CeilometerOptions{..}) <- ask
         liftIO $ do
             -- Setup an additional connection to manually send messages
@@ -393,7 +396,7 @@ testMetricIntegration = do
                 liftIO $ ackEnv env
 
 testError :: IO ()
-testError = runNullPublisher $ do
+testError = runNullCollector $ do
     rawJSON <- liftIO $ BSL.readFile "test/json_files/error.json"
     processedError <- processError rawJSON
     liftIO $ case processedError of
@@ -411,13 +414,13 @@ verifyVolume xs = let n = length xs in
     assertFailure $ concat ["processedVolume has ", show n, " elements:, ", show xs, ". Expected 1"]
 
 testVolume :: IO ()
-testVolume = runNullPublisher $ do
+testVolume = runNullCollector $ do
     rawJSON <- liftIO $ BSL.readFile "test/json_files/volume.json"
     processedVolume <- processSample rawJSON
     liftIO $ verifyVolume processedVolume
 
 testIPFloating :: IO ()
-testIPFloating = runNullPublisher $ do
+testIPFloating = runNullCollector $ do
     rawJSON <- liftIO $ BSL.readFile "test/json_files/ip_floating.json"
     processedIPFloating <- processSample rawJSON
     liftIO $ case processedIPFloating of
@@ -430,7 +433,7 @@ testIPFloating = runNullPublisher $ do
             assertFailure $ concat ["processedIPFloating has ", show n, " elements:, ", show xs, ". Expected 1"]
 
 testInstancePollster :: IO ()
-testInstancePollster = runNullPublisher $ do
+testInstancePollster = runNullCollector $ do
     rawJSON <- liftIO $ BSL.readFile "test/json_files/instance_pollster.json"
     processedInstance <- processSample rawJSON
     liftIO $ case processedInstance of
@@ -452,7 +455,7 @@ testInstancePollster = runNullPublisher $ do
             assertFailure $ concat ["processedInstance has ", show n, " elements:, ", show xs, ". Expected 4"]
 
 testNetworkRxTx :: IO ()
-testNetworkRxTx = runNullPublisher $ do
+testNetworkRxTx = runNullCollector $ do
     rxJSON <- liftIO $ BSL.readFile "test/json_files/network_rx.json"
     txJSON <- liftIO $ BSL.readFile "test/json_files/network_tx.json"
     processedRx <- processSample rxJSON
@@ -475,7 +478,7 @@ testNetworkRxTx = runNullPublisher $ do
             assertFailure $ concat ["processedTx has ", show n, " elements:, ", show xs, ". Expected 1"]
 
 testDiskReadWrite :: IO ()
-testDiskReadWrite = runNullPublisher $ do
+testDiskReadWrite = runNullCollector $ do
     readJSON  <- liftIO $ BSL.readFile "test/json_files/disk_read.json"
     writeJSON <- liftIO $ BSL.readFile "test/json_files/disk_write.json"
     processedRead <- processSample readJSON
@@ -498,7 +501,7 @@ testDiskReadWrite = runNullPublisher $ do
             assertFailure $ concat ["processedWrite has ", show n, " elements:, ", show xs, ". Expected 1"]
 
 testCpu :: IO ()
-testCpu = runNullPublisher $ do
+testCpu = runNullCollector $ do
     rawJSON <- liftIO $ BSL.readFile "test/json_files/cpu.json"
     processedCpu <- processSample rawJSON
     liftIO $ case processedCpu of
@@ -511,7 +514,7 @@ testCpu = runNullPublisher $ do
             assertFailure $ concat ["processedCpu has ", show n, " elements:, ", show xs, ". Expected 1"]
 
 testImagePollster :: IO ()
-testImagePollster = runNullPublisher $ do
+testImagePollster = runNullCollector $ do
     rawJSON <- liftIO $ BSL.readFile "test/json_files/image_size_pollster.json"
     processedImagePollster <- processSample rawJSON
     liftIO $ case processedImagePollster of
@@ -524,7 +527,7 @@ testImagePollster = runNullPublisher $ do
             assertFailure $ concat ["processedImagePollster has ", show n, " elements:, ", show xs, ". Expected 1"]
 
 testSnapshot :: IO ()
-testSnapshot = runNullPublisher $ do
+testSnapshot = runNullCollector $ do
     rawJSON <- liftIO $ BSL.readFile "test/json_files/snapshot_size.json"
     processedSnapshot <- processSample rawJSON
     liftIO $ case processedSnapshot of
@@ -537,7 +540,7 @@ testSnapshot = runNullPublisher $ do
             assertFailure $ concat ["processedSnapshot has ", show n, " elements:, ", show xs, ". Expected 1"]
 
 testIgnoreDiskRequests :: IO ()
-testIgnoreDiskRequests = runNullPublisher $ do
+testIgnoreDiskRequests = runNullCollector $ do
     rawJSON <- liftIO $ BSL.readFile "test/json_files/disk_write_requests.json"
     processedDiskRequest <- processSample rawJSON
     liftIO $ case processedDiskRequest of
@@ -547,7 +550,7 @@ testIgnoreDiskRequests = runNullPublisher $ do
             assertFailure $ concat ["processedDiskRequest has ", show n, " elements:, ", show xs, ". Expected 0"]
 
 testIgnoreSizedInstances :: IO ()
-testIgnoreSizedInstances = runNullPublisher $ do
+testIgnoreSizedInstances = runNullCollector $ do
     rawJSON <- liftIO $ BSL.readFile "test/json_files/instance_tiny.json"
     processedSizedInstance <- processSample rawJSON
     liftIO $ case processedSizedInstance of
@@ -580,7 +583,7 @@ testTimeStamp = do
 -- |Make sure we can parse messages with null payloads without erroring.
 --  We don't expect any points to be returned from parsing these.
 testImageSizeNulls :: IO ()
-testImageSizeNulls = runNullPublisher $ do
+testImageSizeNulls = runNullCollector $ do
     rawJSON <- liftIO $ BSL.readFile "test/json_files/image_size_with_nulls.json"
     processed <- processSample rawJSON
     liftIO $ length processed @?= 0

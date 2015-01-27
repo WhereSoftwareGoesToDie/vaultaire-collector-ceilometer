@@ -4,8 +4,8 @@
 module Ceilometer.Process( processSample
                          , processError
                          , retrieveMessage
-                         , runErrorPublisher
-                         , runPublisher
+                         , runErrorCollector
+                         , runCollector
                          , siphash
                          , siphash32
                          , initState
@@ -39,8 +39,11 @@ import           System.IO
 import           System.Log.Logger
 
 import           Marquise.Client
-import           Vaultaire.Collector.Common.Process
-import           Vaultaire.Collector.Common.Types
+import           Vaultaire.Collector.Common.Process hiding (runCollector,
+                                                     runCollectorN)
+import qualified Vaultaire.Collector.Common.Process as V (runCollector,
+                                                          runCollectorN)
+import           Vaultaire.Collector.Common.Types   hiding (Collector)
 
 import           Ceilometer.Types
 
@@ -103,7 +106,7 @@ initState (_, CeilometerOptions{..}) = do
      infoM "Ceilometer.Process.initState" "Opened channel"
      return $ CeilometerState conn chan
 
-cleanup :: Publisher ()
+cleanup :: Collector ()
 cleanup = do
     (_, CeilometerState conn _ ) <- get
     liftIO $ closeConnection conn
@@ -111,8 +114,8 @@ cleanup = do
 -- | Core entry point for Ceilometer.Process
 --   Processes JSON objects from the configured queue and publishes
 --   SimplePoints and SourceDicts to the vault
-runPublisher :: IO ()
-runPublisher = runCollectorN parseOptions initState cleanup publishSamples
+runCollector :: IO ()
+runCollector = V.runCollectorN parseOptions initState cleanup publishSamples
   where
     publishSamples = do
         (_, CeilometerOptions{..}) <- ask
@@ -129,8 +132,8 @@ runPublisher = runCollectorN parseOptions initState cleanup publishSamples
                     forM_ tuples collectData
                     liftIO $ ackEnv env
 
-runErrorPublisher :: IO ()
-runErrorPublisher = runCollector parseOptions initState cleanup publishErrors
+runErrorCollector :: IO ()
+runErrorCollector = V.runCollector parseOptions initState cleanup publishErrors
   where
     publishErrors = do
         (_, CeilometerOptions{..}) <- ask
@@ -149,23 +152,23 @@ runErrorPublisher = runCollector parseOptions initState cleanup publishErrors
                         Nothing -> return ()
                     liftIO $ ackEnv env
 
-retrieveMessage :: Publisher (Maybe (L.ByteString, Envelope))
+retrieveMessage :: Collector (Maybe (L.ByteString, Envelope))
 retrieveMessage = do
     (_, CeilometerOptions{..}) <- ask
     (_, CeilometerState{..}) <- get
     liftIO $ fmap (first msgBody) <$> getMsg ceilometerMessageChan Ack rabbitQueue
 
-collectData :: (Address, SourceDict, TimeStamp, Word64) -> Publisher ()
+collectData :: (Address, SourceDict, TimeStamp, Word64) -> Collector ()
 collectData (addr, sd, ts, p) = do
     collectSource addr sd
     collectSimple (SimplePoint addr ts p)
 
-collectError :: (Address, SourceDict, TimeStamp, S.ByteString) -> Publisher ()
+collectError :: (Address, SourceDict, TimeStamp, S.ByteString) -> Collector ()
 collectError (addr, sd, ts, p) = do
     collectSource addr sd
     collectExtended (ExtendedPoint addr ts p)
 
-processError :: L.ByteString -> Publisher (Maybe (Address, SourceDict, TimeStamp, S.ByteString))
+processError :: L.ByteString -> Collector (Maybe (Address, SourceDict, TimeStamp, S.ByteString))
 processError bs = case eitherDecode bs of
     Left e -> do
         liftIO $ alertM "Ceilometer.Process.publishErrors" $
