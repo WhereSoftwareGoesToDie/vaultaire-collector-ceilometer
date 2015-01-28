@@ -1,15 +1,24 @@
 name:                vaultaire-collector-ceilometer
-version:             0.2.3
-synopsis:            Vaultaire Collector for Ceilometer
+version:             0.3.0
+synopsis:            Vaultaire Collectors for Openstack/Ceilometer
+description:         Provides two collectors for openstack/ceilometer.
+                     vaultaire-collector-ceilometer collects metric data from
+                     RabbitMQ and vaultaire-collector-os-error collects error
+                     data from RabbitMQ.
 homepage:            https://github.com/anchor/vaultaire-collector-ceilometer
 license:             BSD3
 license-file:        LICENSE
 author:              Oswyn Brent
 maintainer:          engineering@anchor.net.au
-copyright:           2014 Anchor Systems and others
+copyright:           2014-2015 Anchor Systems and others
+category:            Development
 build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.18
+
+source-repository head
+  type:                git
+  location:            git@github.com:anchor/vaultaire-collector-ceilometer.git
 
 library
   hs-source-dirs:    lib
@@ -31,12 +40,12 @@ library
                      optparse-applicative,
                      time,
                      old-locale,
+                     bifunctors,
                      mtl,
-                     vaultaire-collector-common >= 0.3.0,
+                     vaultaire-collector-common >= 0.4.0,
                      vaultaire-common
 
   ghc-options:       -O2
-                     -threaded
                      -Wall
                      -Wwarn
                      -fwarn-tabs
@@ -47,6 +56,22 @@ executable vaultaire-collector-ceilometer
   hs-source-dirs:    src
   default-language:  Haskell2010
   main-is:           Main.hs
+
+  build-depends:     base >=4.7 && <4.8,
+                     vaultaire-collector-ceilometer
+
+  ghc-options:       -O2
+                     -threaded
+                     -Wall
+                     -Wwarn
+                     -fwarn-tabs
+
+  ghc-prof-options:  -fprof-auto
+
+executable vaultaire-collector-openstack-error
+  hs-source-dirs:    src
+  default-language:  Haskell2010
+  main-is:           Error.hs
 
   build-depends:     base >=4.7 && <4.8,
                      vaultaire-collector-ceilometer
@@ -75,12 +100,11 @@ test-suite           tests
                      QuickCheck,
                      bytestring,
                      text,
-                     --required for conduit
-                     monad-control >= 0.3.1 && < 0.4,                     
+                     amqp,
                      unordered-containers,
                      vaultaire-collector-ceilometer,
                      vaultaire-common,
-                     vaultaire-collector-common >= 0.3.0,
+                     vaultaire-collector-common >= 0.4.0,
                      marquise >= 3.1.0
 
   ghc-options:       -threaded
