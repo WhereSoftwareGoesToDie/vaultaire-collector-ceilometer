@@ -406,7 +406,7 @@ testError = runNullCollector $ do
             ts @?= expectedErrorTimestamp
 
 verifyVolume :: [(Address, SourceDict, TimeStamp, Word64)] -> IO ()
-verifyVolume [x@(_, sd, ts, p)] = do
+verifyVolume [_@(_, sd, ts, p)] = do
     sd @?= expectedVolumeSd
     ts @?= expectedVolumeTimestamp
     p  @?= expectedVolumePayload
@@ -424,7 +424,7 @@ testIPFloating = runNullCollector $ do
     rawJSON <- liftIO $ BSL.readFile "test/json_files/ip_floating.json"
     processedIPFloating <- processSample rawJSON
     liftIO $ case processedIPFloating of
-        [x@(_, sd, ts, p)] -> do
+        [_@(_, sd, ts, p)] -> do
             sd @?= expectedIPFloatingSd
             ts @?= expectedIPFloatingTimestamp
             p  @?= expectedIPFloatingPayload
@@ -460,7 +460,7 @@ testNetworkRxTx = runNullCollector $ do
     txJSON <- liftIO $ BSL.readFile "test/json_files/network_tx.json"
     processedRx <- processSample rxJSON
     liftIO $ case processedRx of
-        [x@(_, sd, ts, p)] -> do
+        [_@(_, sd, ts, p)] -> do
             sd @?= expectedNetworkRxSd
             ts @?= expectedNetworkRxTimestamp
             p  @?= expectedNetworkRxPayload
@@ -469,7 +469,7 @@ testNetworkRxTx = runNullCollector $ do
             assertFailure $ concat ["processedRx has ", show n, " elements:, ", show xs, ". Expected 1"]
     processedTx <- processSample txJSON
     liftIO $ case processedTx of
-        [x@(_, sd, ts, p)] -> do
+        [_@(_, sd, ts, p)] -> do
             sd @?= expectedNetworkTxSd
             ts @?= expectedNetworkTxTimestamp
             p  @?= expectedNetworkTxPayload
@@ -483,7 +483,7 @@ testDiskReadWrite = runNullCollector $ do
     writeJSON <- liftIO $ BSL.readFile "test/json_files/disk_write.json"
     processedRead <- processSample readJSON
     liftIO $ case processedRead of
-        [x@(_, sd, ts, p)] -> do
+        [_@(_, sd, ts, p)] -> do
             sd @?= expectedDiskReadSd
             ts @?= expectedDiskReadTimestamp
             p  @?= expectedDiskReadPayload
@@ -492,7 +492,7 @@ testDiskReadWrite = runNullCollector $ do
             assertFailure $ concat ["processedRead has ", show n, " elements:, ", show xs, ". Expected 1"]
     processedWrite <- processSample writeJSON
     liftIO $ case processedWrite of
-        [x@(_, sd, ts, p)] -> do
+        [_@(_, sd, ts, p)] -> do
             sd @?= expectedDiskWriteSd
             ts @?= expectedDiskWriteTimestamp
             p  @?= expectedDiskWritePayload
@@ -505,7 +505,7 @@ testCpu = runNullCollector $ do
     rawJSON <- liftIO $ BSL.readFile "test/json_files/cpu.json"
     processedCpu <- processSample rawJSON
     liftIO $ case processedCpu of
-        [x@(_, sd, ts, p)] -> do
+        [_@(_, sd, ts, p)] -> do
             sd @?= expectedCpuSd
             ts @?= expectedCpuTimestamp
             p  @?= expectedCpuPayload
@@ -518,7 +518,7 @@ testImagePollster = runNullCollector $ do
     rawJSON <- liftIO $ BSL.readFile "test/json_files/image_size_pollster.json"
     processedImagePollster <- processSample rawJSON
     liftIO $ case processedImagePollster of
-        [x@(_, sd, ts, p)] -> do
+        [_@(_, sd, ts, p)] -> do
             sd @?= expectedImagePollsterSd
             ts @?= expectedImagePollsterTimestamp
             p  @?= expectedImagePollsterPayload
@@ -531,7 +531,7 @@ testSnapshot = runNullCollector $ do
     rawJSON <- liftIO $ BSL.readFile "test/json_files/snapshot_size.json"
     processedSnapshot <- processSample rawJSON
     liftIO $ case processedSnapshot of
-        [x@(_, sd, ts, p)] -> do
+        [_@(_, sd, ts, p)] -> do
             sd @?= expectedSnapshotSd
             ts @?= expectedSnapshotTimestamp
             p  @?= expectedSnapshotPayload
