@@ -17,7 +17,6 @@ import           Data.Word
 import           Network.AMQP
 import           System.Locale
 
-import           Vaultaire.Collector.Common.Types hiding (Collector)
 import qualified Vaultaire.Collector.Common.Types as V (Collector)
 import           Vaultaire.Types
 

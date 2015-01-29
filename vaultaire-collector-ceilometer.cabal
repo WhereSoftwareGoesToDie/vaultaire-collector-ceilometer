@@ -108,4 +108,6 @@ test-suite           tests
                      marquise >= 3.1.0
 
   ghc-options:       -threaded
+                     -Wall
+                     -Wwarn
   ghc-prof-options:  -auto-all
