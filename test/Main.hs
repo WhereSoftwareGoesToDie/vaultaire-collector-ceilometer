@@ -339,7 +339,7 @@ expectedSnapshotSd = either error id (makeSourceDict expectedSnapshotHashmap)
 expectedErrorHashmap :: HashMap Text Text
 expectedErrorHashmap = H.fromList
   [ ("publisher_id", "magic.monad.net.au"),
-    ("_os_error", "1")
+    ("_extended", "1")
   ]
 
 expectedErrorSd :: SourceDict
