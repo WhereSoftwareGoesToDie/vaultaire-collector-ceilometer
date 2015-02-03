@@ -177,7 +177,7 @@ processError bs = case eitherDecode bs of
     Right ErrorMessage{..} -> do
         let addr = hashIdentifier $ T.encodeUtf8 errorPublisher
         let sdPairs = [ ("publisher_id", errorPublisher)
-                      , ("_os_error", "1") ]
+                      , ("_extended", "1") ]
         sd <- liftIO $ mapToSourceDict $ H.fromList sdPairs
         return $ case sd of
             Just sd' -> Just (addr, sd', errorTimeStamp, mconcat $ L.toChunks bs)
