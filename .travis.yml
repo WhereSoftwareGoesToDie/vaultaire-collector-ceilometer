@@ -40,7 +40,4 @@ install:
   - 'cabal-$CABALVER install --only-dependencies --enable-tests --enable-benchmarks'
 
 script:
-  - 'cabal-$CABALVER configure'
-  - 'cabal-$CABALVER build'
-  - 'cabal-$CABALVER sdist'
   - 'cabal-$CABALVER test'
