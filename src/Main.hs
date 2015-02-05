@@ -2,7 +2,7 @@
 
 module Main where
 
-import           Ceilometer.Process
+import           Vaultaire.Collector.Ceilometer.Process
 
 main :: IO ()
 main = runCollector

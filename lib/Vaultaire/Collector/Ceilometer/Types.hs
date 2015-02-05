@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections     #-}
 
-module Ceilometer.Types where
+module Vaultaire.Collector.Ceilometer.Types where
 
 import           Control.Applicative
 import           Control.Monad
