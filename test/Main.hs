@@ -6,15 +6,11 @@ module Main where
 import           Control.Applicative
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Control.Monad.Trans
 import           Data.Aeson
 import           Data.Bits
-import           Data.ByteString                        (ByteString)
-import qualified Data.ByteString                        as S
 import qualified Data.ByteString.Lazy.Char8             as BSL
 import           Data.HashMap.Strict                    (HashMap)
 import qualified Data.HashMap.Strict                    as H
-import           Data.Maybe
 import           Data.Monoid
 import           Data.Text                              (Text)
 import           Data.Word
@@ -22,8 +18,6 @@ import           Network.AMQP
 import           Test.Hspec
 import           Test.HUnit.Base
 
-import           Vaultaire.Collector.Common.Process     hiding (runCollector,
-                                                         runNullCollector)
 import qualified Vaultaire.Collector.Common.Process     as V (runCollector,
                                                               runNullCollector)
 import           Vaultaire.Types
@@ -566,6 +560,7 @@ instance Show WrappedTimeStamp where
 
 instance FromJSON WrappedTimeStamp where
     parseJSON (Object x) = WrappedTimeStamp <$> x .: "x"
+    parseJSON _          = mzero
 
 testTimeStamp :: IO ()
 testTimeStamp = do
@@ -577,8 +572,8 @@ testTimeStamp = do
     let tz2    = f "1993-03-17T21:00:00+1000"
     basic1 @?= (Just $ TimeStamp 0)
     basic2 @?= (Just $ TimeStamp 0)
-    tz1    @?= (Just $ TimeStamp (7200*10^9))
-    tz2    @?= (Just $ TimeStamp (732366000*10^9))
+    tz1    @?= (Just $ TimeStamp (7200*10^(9 :: Integer)))
+    tz2    @?= (Just $ TimeStamp (732366000*10^(9 :: Integer)))
 
 -- |Make sure we can parse messages with null payloads without erroring.
 --  We don't expect any points to be returned from parsing these.
