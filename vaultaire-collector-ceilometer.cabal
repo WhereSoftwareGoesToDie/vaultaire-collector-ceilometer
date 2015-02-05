@@ -26,6 +26,12 @@ library
 
   exposed-modules:   Vaultaire.Collector.Ceilometer.Types
                      Vaultaire.Collector.Ceilometer.Process
+                     Vaultaire.Collector.Ceilometer.Process.Common
+                     Vaultaire.Collector.Ceilometer.Process.Image
+                     Vaultaire.Collector.Ceilometer.Process.Instance
+                     Vaultaire.Collector.Ceilometer.Process.IP
+                     Vaultaire.Collector.Ceilometer.Process.Snapshot
+                     Vaultaire.Collector.Ceilometer.Process.Volume
 
   build-depends:     base >=4.7 && <4.8,
                      aeson,
