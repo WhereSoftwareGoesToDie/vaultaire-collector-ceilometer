@@ -9,27 +9,27 @@ import           Control.Monad.State
 import           Control.Monad.Trans
 import           Data.Aeson
 import           Data.Bits
-import           Data.ByteString                    (ByteString)
-import qualified Data.ByteString                    as S
-import qualified Data.ByteString.Lazy.Char8         as BSL
-import           Data.HashMap.Strict                (HashMap)
-import qualified Data.HashMap.Strict                as H
+import           Data.ByteString                        (ByteString)
+import qualified Data.ByteString                        as S
+import qualified Data.ByteString.Lazy.Char8             as BSL
+import           Data.HashMap.Strict                    (HashMap)
+import qualified Data.HashMap.Strict                    as H
 import           Data.Maybe
 import           Data.Monoid
-import           Data.Text                          (Text)
+import           Data.Text                              (Text)
 import           Data.Word
 import           Network.AMQP
 import           Test.Hspec
 import           Test.HUnit.Base
 
-import           Vaultaire.Collector.Common.Process hiding (runCollector,
-                                                     runNullCollector)
-import qualified Vaultaire.Collector.Common.Process as V (runCollector,
-                                                          runNullCollector)
+import           Vaultaire.Collector.Common.Process     hiding (runCollector,
+                                                         runNullCollector)
+import qualified Vaultaire.Collector.Common.Process     as V (runCollector,
+                                                              runNullCollector)
 import           Vaultaire.Types
 
-import           Ceilometer.Process
-import           Ceilometer.Types
+import           Vaultaire.Collector.Ceilometer.Process
+import           Vaultaire.Collector.Ceilometer.Types
 
 -- Convenience run function
 runNullCollector :: Collector a -> IO a
