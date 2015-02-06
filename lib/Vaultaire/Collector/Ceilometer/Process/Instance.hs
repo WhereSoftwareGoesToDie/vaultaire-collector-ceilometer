@@ -89,7 +89,7 @@ getInstancePayloads Metric{..} Flavor{..} = do
         Just (status, instanceType) -> do
             let instanceType' = siphash32 $ T.encodeUtf8 instanceType
             let diskTotal = instanceDisk + instanceEphemeral
-            let rawPayloads = [instanceVcpus, instanceRam, diskTotal, instanceType']
+            let rawPayloads = map fromIntegral [instanceVcpus, instanceRam, diskTotal, instanceType']
             -- These are taken from nova.api.openstack.common in the
             -- OpenStack Nova codebase.
             -- FIXME(fractalcat): shouldn't this be an enum?
@@ -121,5 +121,5 @@ getInstancePayloads Metric{..} Flavor{..} = do
                 Nothing
             else
                 -- Since this is for pollsters, both verbs and endpoints are meaningless
-                Just $ map (constructCompoundPayload statusValue 0 0) rawPayloads
+                Just $ map (constructCompoundPayload (fromIntegral statusValue) 0 0) rawPayloads
         Nothing -> return Nothing

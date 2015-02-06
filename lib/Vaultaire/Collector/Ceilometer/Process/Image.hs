@@ -68,6 +68,6 @@ getImagePayload m@Metric{..} = do
             return $ if (-1) `elem` [statusValue, verbValue, endpointValue] then
                 Nothing
             else case metricPayload of
-                Just p  -> Just $ constructCompoundPayload statusValue verbValue endpointValue p
+                Just p  -> Just $ constructCompoundPayload statusValue verbValue endpointValue (fromIntegral p)
                 Nothing -> Nothing
         Nothing -> return Nothing

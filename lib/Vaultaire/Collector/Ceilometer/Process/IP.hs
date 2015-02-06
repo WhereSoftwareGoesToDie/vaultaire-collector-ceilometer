@@ -18,7 +18,7 @@ processIpEvent :: Metric -> Collector [(Address, SourceDict, TimeStamp, Word64)]
 processIpEvent = processEvent getIpPayload
 
 -- | An allocation has no 'value' per se, so we arbitarily use 1
-ipRawPayload :: Word64
+ipRawPayload :: Word32
 ipRawPayload = 1
 
 -- | Constructs the compound payload for ip allocation events
