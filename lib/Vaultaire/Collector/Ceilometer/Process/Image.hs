@@ -21,32 +21,33 @@ import           Vaultaire.Collector.Ceilometer.Types
 processImageSizeEvent :: Metric -> Collector [(Address, SourceDict, TimeStamp, Word64)]
 processImageSizeEvent = processEvent getImagePayload
 
-parseImageStatus :: Text -> Maybe Word8
-parseImageStatus x = review pfImageStatus <$> parseImageStatus' x
-  where
-    parseImageStatus' "active"         = Just ImageActive
-    parseImageStatus' "saving"         = Just ImageSaving
-    parseImageStatus' "deleted"        = Just ImageDeleted
-    parseImageStatus' "queued"         = Just ImageQueued
-    parseImageStatus' "pending_delete" = Just ImagePendingDelete
-    parseImageStatus' "killed"         = Just ImageKilled
-    parseImageStatus' _                = Nothing
+parseImageStatus :: Text -> Maybe PFImageStatus
+parseImageStatus "active"         = Just ImageActive
+parseImageStatus "saving"         = Just ImageSaving
+parseImageStatus "deleted"        = Just ImageDeleted
+parseImageStatus "queued"         = Just ImageQueued
+parseImageStatus "pending_delete" = Just ImagePendingDelete
+parseImageStatus "killed"         = Just ImageKilled
+parseImageStatus _                = Nothing
 
-parseImageVerb :: Text -> Maybe Word8
-parseImageVerb x = review pfImageVerb <$> parseImageVerb' x
-  where
-    parseImageVerb' "serve"    = Just ImageServe
-    parseImageVerb' "update"   = Just ImageUpdate
-    parseImageVerb' "upload"   = Just ImageUpload
-    parseImageVerb' "download" = Just ImageDownload
-    parseImageVerb' "delete"   = Just ImageDelete
-    parseImageVerb' _          = Nothing
+parseImageVerb :: Text -> Maybe PFImageVerb
+parseImageVerb "serve"    = Just ImageServe
+parseImageVerb "update"   = Just ImageUpdate
+parseImageVerb "upload"   = Just ImageUpload
+parseImageVerb "download" = Just ImageDownload
+parseImageVerb "delete"   = Just ImageDelete
+parseImageVerb _          = Nothing
 
 -- | Constructs the compound payload for image events
 getImagePayload :: Metric -> IO (Maybe Word64)
 getImagePayload m@Metric{..} = do
-    v <- case T.splitOn "." <$> getEventType m of
-        Just (_:verb:_) -> return $ Just verb
+    verb <- case T.splitOn "." <$> getEventType m of
+        Just (_:verb:_) -> case parseImageVerb verb of
+            Just x  -> return $ Just x
+            Nothing -> do
+                alertM "Ceilometer.Process.getImagePayload" $
+                    "Invalid verb for image event: " <> show verb
+                return Nothing
         Just x -> do
             alertM "Ceilometer.Process.getImagePayload"
                  $ "Invalid parse of verb for image event" <> show x
@@ -55,7 +56,7 @@ getImagePayload m@Metric{..} = do
             alertM "Ceilometer.Process.getImagePayload"
                    "event_type field missing from image event"
             return Nothing
-    statusValue <- case H.lookup "status" metricMetadata of
+    status <- case H.lookup "status" metricMetadata of
         Just (String status) -> case parseImageStatus status of
             Just x  -> return $ Just x
             Nothing -> do
@@ -70,21 +71,9 @@ getImagePayload m@Metric{..} = do
             alertM "Ceilometer.Process.getImagePayload"
                    "Status field missing from image event"
             return Nothing
-    case v of
-        Just verb -> do
-            verbValue <- case parseImageVerb verb of
-                Just x  -> return $ Just x
-                Nothing -> do
-                    alertM "Ceilometer.Process.getImagePayload" $
-                        "Invalid verb for image event: " <> show verb
-                    return Nothing
-            let endpointValue = parseEndpoint Nothing
-            let payload = case metricPayload of
-                    Just p -> do
-                        sv <- statusValue
-                        vv <- verbValue
-                        ev <- endpointValue
-                        return $ constructCompoundPayload sv vv ev (fromIntegral p)
-                    Nothing -> Nothing
-            return payload
-        Nothing -> return Nothing
+    return $ do
+        s <- status
+        v <- verb
+        let e = Instant
+        p <- fromIntegral <$> metricPayload
+        return $ review (prCompoundEvent . pdImage) $ PDImage s v e p

@@ -99,17 +99,6 @@ siphash x = let (SipHash h) = hash (SipKey 0 0) x in h
 siphash32 :: S.ByteString -> Word64
 siphash32 = (`shift` (-32)) . siphash
 
--- | Constructs a compound payload from components
-constructCompoundPayload :: Word8 -> Word8 -> Word8 -> Word32 -> Word64
-constructCompoundPayload statusValue verbValue endpointValue rawPayload =
-    let s = fromIntegral statusValue
-        v = fromIntegral verbValue     `shift` 8
-        e = fromIntegral endpointValue `shift` 16
-        r = 0 `shift` 24
-        p = fromIntegral rawPayload    `shift` 32
-    in
-        s + v + e + r + p
-
 -- | Processes a pollster with no special requirements
 processBasePollster :: Metric -> Collector [(Address, SourceDict, TimeStamp, Word64)]
 processBasePollster m@Metric{..} = do
@@ -138,10 +127,8 @@ processEvent f m@Metric{..} = do
                             "Impossible control flow reached in processEvent. Given: " ++ show m
             return []
 
-parseEndpoint :: Maybe Text -> Maybe Word8
-parseEndpoint x = review pfEndpoint <$> parseEndpoint' x
-  where
-    parseEndpoint' (Just "start") = Just Start
-    parseEndpoint' (Just "end"  ) = Just End
-    parseEndpoint' (Just _      ) = Nothing
-    parseEndpoint'  Nothing       = Just Instant
+parseEndpoint :: Maybe Text -> Maybe PFEndpoint
+parseEndpoint (Just "start") = Just Start
+parseEndpoint (Just "end"  ) = Just End
+parseEndpoint (Just _      ) = Nothing
+parseEndpoint  Nothing       = Just Instant
