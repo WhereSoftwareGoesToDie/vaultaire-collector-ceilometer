@@ -51,7 +51,7 @@ library
                      bifunctors,
                      mtl,
                      ceilometer-common,
-                     vaultaire-collector-common >= 0.4.0,
+                     vaultaire-collector-common >= 0.6.0,
                      vaultaire-common,
                      zeromq4-haskell
 
@@ -100,7 +100,7 @@ test-suite           tests
                      unordered-containers,
                      vaultaire-collector-ceilometer,
                      vaultaire-common,
-                     vaultaire-collector-common >= 0.4.0,
+                     vaultaire-collector-common >= 0.6.0,
                      marquise >= 3.1.0
 
   ghc-options:       -threaded
