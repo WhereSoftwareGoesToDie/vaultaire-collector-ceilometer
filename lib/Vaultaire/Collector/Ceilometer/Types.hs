@@ -63,10 +63,10 @@ data Metric = Metric
     } deriving Show
 
 data Flavor = Flavor
-    { instanceVcpus     :: Word64
-    , instanceRam       :: Word64
-    , instanceDisk      :: Word64
-    , instanceEphemeral :: Word64
+    { instanceVcpus     :: Word32
+    , instanceRam       :: Word32
+    , instanceDisk      :: Word32
+    , instanceEphemeral :: Word32
     } deriving Show
 
 data CeilometerOptions = CeilometerOptions
