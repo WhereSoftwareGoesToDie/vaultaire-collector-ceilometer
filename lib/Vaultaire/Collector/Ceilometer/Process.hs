@@ -3,9 +3,7 @@
 
 module Vaultaire.Collector.Ceilometer.Process
     ( processSample
-    , processError
     , retrieveMessage
-    , runErrorCollector
     , runCollector
     , initState
     , cleanup
@@ -13,31 +11,23 @@ module Vaultaire.Collector.Ceilometer.Process
     ) where
 
 import           Control.Applicative
-import           Control.Concurrent                              hiding (yield)
 import           Control.Monad
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Aeson
-import           Data.Bifunctor
-import qualified Data.ByteString                                 as S
 import qualified Data.ByteString.Lazy.Char8                      as L
-import qualified Data.HashMap.Strict                             as H
 import           Data.Monoid
 import qualified Data.Text                                       as T
-import qualified Data.Text.Encoding                              as T
-import qualified Data.Text.IO                                    as T
 import           Data.Word
-import           Network.AMQP
 import           Options.Applicative                             hiding
                                                                   (Success)
-import           System.IO
 import           System.Log.Logger
+import           System.ZMQ4
 
 import           Marquise.Client
 import           Vaultaire.Collector.Common.Process              hiding
-                                                                  (runCollector,
-                                                                  runCollectorN)
-import qualified Vaultaire.Collector.Common.Process              as V (runCollector, runCollectorN)
+                                                                  (runCollector)
+import qualified Vaultaire.Collector.Common.Process              as V (runCollector)
 import           Vaultaire.Collector.Common.Types                hiding
                                                                   (Collector)
 
@@ -51,143 +41,55 @@ import           Vaultaire.Collector.Ceilometer.Types
 
 parseOptions :: Parser CeilometerOptions
 parseOptions = CeilometerOptions
-    <$> (T.pack <$> strOption
-        (long "rabbit-login"
-         <> short 'u'
-         <> metavar "USERNAME"
-         <> help "RabbitMQ username"))
-    <*> (T.pack <$> strOption
-        (long "rabbit-virtual-host"
-         <> short 'r'
-         <> metavar "VIRTUAL_HOSTNAME"
-         <> value "/"
-         <> help "RabbitMQ virtual host"))
-    <*> strOption
-        (long "rabbit-host"
+    <$> strOption
+        (long "publisher-host"
          <> short 'H'
+
          <> metavar "HOSTNAME"
-         <> help "RabbitMQ host")
+         <> help "ceilometer-publisher-zeromq host")
     <*> option auto
-        (long "rabbit-port"
+        (long "publisher-port"
          <> short 'p'
          <> value 5672
          <> metavar "PORT"
-         <> help "RabbitMQ port")
-    <*> switch
-        (long "rabbit-ha"
-         <> short 'a'
-         <> help "Use highly available queues for RabbitMQ")
-    <*> switch
-        (long "rabbit-ssl"
-        <> short 's'
-        <> help "Use SSL for RabbitMQ")
-    <*> (T.pack <$> strOption
-        (long "rabbit-queue"
-         <> short 'q'
-         <> value "metering"
-         <> metavar "QUEUE"
-         <> help "RabbitMQ queue"))
-    <*> option auto
-        (long "poll-period"
-         <> short 't'
-         <> value 5
-         <> metavar "POLL-PERIOD"
-         <> help "Time to wait (in seconds) before re-querying empty queue.")
-    <*> strOption
-        (long "password-file"
-         <> short 'f'
-         <> metavar "PASSWORD-FILE"
-         <> help "File containing the password to use for RabbitMQ")
+         <> help "ceilometer-publisher-zeromq port")
 
+-- | Initialised ZMQ socket and context
 initState :: CollectorOpts CeilometerOptions -> IO CeilometerState
 initState (_, CeilometerOptions{..}) = do
-     password <- T.strip <$> withFile rabbitPasswordFile ReadMode T.hGetContents
-     conn <- openConnection' rabbitHost (fromInteger rabbitPort) rabbitVHost rabbitLogin password
-     infoM "Ceilometer.Process.initState" "Connected to RabbitMQ server"
-     chan <- openChannel conn
-     infoM "Ceilometer.Process.initState" "Opened channel"
-     return $ CeilometerState conn chan
+    c <- context
+    sock <- socket c Sub
+    connect sock ("tcp://" <> zmqHost <> ":" <> show zmqPort)
+    infoM "Ceilometer.Process.initState" "Connected to publisher."
+    return $ CeilometerState sock c
 
+-- | Cleans up ZMQ socket and context
 cleanup :: Collector ()
 cleanup = do
-    (_, CeilometerState conn _ ) <- get
-    liftIO $ closeConnection conn
+    (_, CeilometerState{..}) <- get
+    liftIO $ close zmqSocket
+    liftIO $ term  zmqContext
 
 -- | Core entry point for Ceilometer.Process
---   Processes JSON objects from the configured queue and publishes
---   SimplePoints and SourceDicts to the vault
+--   Processes JSON objects from the configured publisher and
+--   writes out SimplePoints and SourceDicts to spool files
 runCollector :: IO ()
-runCollector = V.runCollectorN parseOptions initState cleanup publishSamples
+runCollector = V.runCollector parseOptions initState cleanup publishSamples
   where
-    publishSamples = do
-        (_, CeilometerOptions{..}) <- ask
-        (_, CeilometerState{..}) <- get
-        forever $ do
-            msg <- retrieveMessage
-            case msg of
-                Nothing -> liftIO $ do
-                    infoM "Ceilometer.Process.publishSamples" $
-                        "No message received, sleeping for " <> show rabbitPollPeriod <> " s"
-                    threadDelay (1000000 * rabbitPollPeriod)
-                Just (msg', env) -> do
-                    tuples <- processSample msg'
-                    forM_ tuples collectData
-                    liftIO $ ackEnv env
+    publishSamples = forever $ retrieveMessage >>= processSample >>= mapM_ collectData
+    collectData (addr, sd, ts, p) = do
+        collectSource addr sd
+        collectSimple (SimplePoint addr ts p)
 
-runErrorCollector :: IO ()
-runErrorCollector = V.runCollector parseOptions initState cleanup publishErrors
-  where
-    publishErrors = do
-        (_, CeilometerOptions{..}) <- ask
-        (_, CeilometerState{..}) <- get
-        forever $ do
-            msg <- retrieveMessage
-            case msg of
-                Nothing          -> liftIO $ do
-                    infoM "Ceilometer.Process.publishErrors" $
-                        "No message received, sleeping for " <> show rabbitPollPeriod <> " s"
-                    threadDelay (1000000 * rabbitPollPeriod)
-                Just (msg', env) -> do
-                    processed <- processError msg'
-                    case processed of
-                        Just x  -> collectError x
-                        Nothing -> return ()
-                    liftIO $ ackEnv env
-
-retrieveMessage :: Collector (Maybe (L.ByteString, Envelope))
+-- | Blocking read from ceilometer-publisher-zeromq
+retrieveMessage :: Collector L.ByteString
 retrieveMessage = do
-    (_, CeilometerOptions{..}) <- ask
     (_, CeilometerState{..}) <- get
-    liftIO $ fmap (first msgBody) <$> getMsg ceilometerMessageChan Ack rabbitQueue
-
-collectData :: (Address, SourceDict, TimeStamp, Word64) -> Collector ()
-collectData (addr, sd, ts, p) = do
-    collectSource addr sd
-    collectSimple (SimplePoint addr ts p)
-
-collectError :: (Address, SourceDict, TimeStamp, S.ByteString) -> Collector ()
-collectError (addr, sd, ts, p) = do
-    collectSource addr sd
-    collectExtended (ExtendedPoint addr ts p)
-
-processError :: L.ByteString -> Collector (Maybe (Address, SourceDict, TimeStamp, S.ByteString))
-processError bs = case eitherDecode bs of
-    Left e -> do
-        liftIO $ alertM "Ceilometer.Process.publishErrors" $
-                        "Failed to parse: " <> L.unpack bs <> " Error: " <> e
-        return Nothing
-    Right ErrorMessage{..} -> do
-        let addr = hashIdentifier $ T.encodeUtf8 errorPublisher
-        let sdPairs = [ ("publisher_id", errorPublisher)
-                      , ("_extended", "1") ]
-        sd <- liftIO $ mapToSourceDict $ H.fromList sdPairs
-        return $ case sd of
-            Just sd' -> Just (addr, sd', errorTimeStamp, mconcat $ L.toChunks bs)
-            Nothing  -> Nothing
+    liftIO $ L.fromStrict <$> receive zmqSocket
 
 -- | Takes in a JSON Object and processes it into a list of
 --   (Address, SourceDict, TimeStamp, Payload) tuples
-processSample :: L.ByteString -> PublicationData
+processSample :: L.ByteString -> Collector [(Address, SourceDict, TimeStamp, Word64)]
 processSample bs =
     case eitherDecode bs of
         Left e  -> do
@@ -196,7 +98,9 @@ processSample bs =
             return []
         Right m -> process m
 
-process :: Metric -> PublicationData
+-- | Primary processing function, converts a parsed Ceilometer metric
+--   into a list of vaultaire SimplePoint and SourceDict data
+process :: Metric -> Collector [(Address, SourceDict, TimeStamp, Word64)]
 process m = process' (metricName m) (isEvent m)
   where
 -- Supported metrics

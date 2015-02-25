@@ -108,7 +108,7 @@ constructCompoundPayload statusValue verbValue endpointValue rawPayload =
         s + v + e + r + p
 
 -- | Processes a pollster with no special requirements
-processBasePollster :: Metric -> PublicationData
+processBasePollster :: Metric -> Collector [(Address, SourceDict, TimeStamp, Word64)]
 processBasePollster m@Metric{..} = do
     sd <- liftIO $ mapToSourceDict $ getSourceMap m
     case sd of
@@ -120,7 +120,7 @@ processBasePollster m@Metric{..} = do
         Nothing -> return []
 
 -- | Constructs the appropriate compound payload and vault data for an event
-processEvent :: (Metric -> IO (Maybe Word64)) -> Metric -> PublicationData
+processEvent :: (Metric -> IO (Maybe Word64)) -> Metric -> Collector [(Address, SourceDict, TimeStamp, Word64)]
 processEvent f m@Metric{..} = do
     p  <- liftIO $ f m
     sd <- liftIO $ mapToSourceDict $ getSourceMap m
