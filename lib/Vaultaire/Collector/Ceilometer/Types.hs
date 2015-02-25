@@ -75,7 +75,7 @@ data CeilometerOptions = CeilometerOptions
     }
 
 data CeilometerState = CeilometerState
-    { zmqSocket  :: Socket Sub
+    { zmqSocket  :: Socket Rep
     , zmqContext :: Context
     }
 

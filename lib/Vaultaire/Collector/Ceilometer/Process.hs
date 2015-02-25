@@ -50,19 +50,18 @@ parseOptions = CeilometerOptions
     <*> option auto
         (long "publisher-port"
          <> short 'p'
-         <> value 5672
+         <> value 8282
          <> metavar "PORT"
          <> help "ceilometer-publisher-zeromq port")
 
--- | Initialised ZMQ socket and context
+-- | Initialise ZMQ socket and context
 initState :: CollectorOpts CeilometerOptions -> IO CeilometerState
 initState (_, CeilometerOptions{..}) = do
     c <- context
-    sock <- socket c Sub
+    sock <- socket c Rep
     let connString = "tcp://" <> zmqHost <> ":" <> show zmqPort
     connect sock connString
-    subscribe sock ""
-    infoM "Ceilometer.Process.initState" $ "Connected to publisher at " <> connString
+    infoM "Ceilometer.Process.initState" $ "Listening to publishers at " <> connString
     return $ CeilometerState sock c
 
 -- | Cleans up ZMQ socket and context
@@ -78,10 +77,14 @@ cleanup = do
 runCollector :: IO ()
 runCollector = V.runCollector parseOptions initState cleanup publishSamples
   where
-    publishSamples = forever $ retrieveMessage >>= processSample >>= mapM_ collectData
+    publishSamples = forever $ retrieveMessage >>= processSample >>= mapM_ collectData >> ack
+
     collectData (addr, sd, ts, p) = do
         collectSource addr sd
         collectSimple (SimplePoint addr ts p)
+    ack = do
+        (_, CeilometerState{..}) <- get
+        liftIO $ send zmqSocket [] ""
 
 -- | Blocking read from ceilometer-publisher-zeromq
 retrieveMessage :: Collector L.ByteString
