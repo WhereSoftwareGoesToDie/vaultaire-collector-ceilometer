@@ -59,8 +59,10 @@ initState :: CollectorOpts CeilometerOptions -> IO CeilometerState
 initState (_, CeilometerOptions{..}) = do
     c <- context
     sock <- socket c Sub
-    connect sock ("tcp://" <> zmqHost <> ":" <> show zmqPort)
-    infoM "Ceilometer.Process.initState" "Connected to publisher."
+    let connString = "tcp://" <> zmqHost <> ":" <> show zmqPort
+    connect sock connString
+    subscribe sock ""
+    infoM "Ceilometer.Process.initState" $ "Connected to publisher at " <> connString
     return $ CeilometerState sock c
 
 -- | Cleans up ZMQ socket and context
