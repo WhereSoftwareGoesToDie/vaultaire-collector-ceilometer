@@ -60,7 +60,7 @@ initState (_, CeilometerOptions{..}) = do
     c <- context
     sock <- socket c Rep
     let connString = "tcp://" <> zmqHost <> ":" <> show zmqPort
-    connect sock connString
+    bind sock connString
     infoM "Ceilometer.Process.initState" $ "Listening to publishers at " <> connString
     return $ CeilometerState sock c
 
