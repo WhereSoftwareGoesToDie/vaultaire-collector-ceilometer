@@ -7,6 +7,7 @@ module Vaultaire.Collector.Ceilometer.Process
     , runCollector
     , initState
     , cleanup
+    , ackLast
     , module Process
     ) where
 
@@ -77,20 +78,22 @@ cleanup = do
 runCollector :: IO ()
 runCollector = V.runCollector parseOptions initState cleanup publishSamples
   where
-    publishSamples = forever $ retrieveMessage >>= processSample >>= mapM_ collectData >> ack
-
+    publishSamples = forever $ retrieveMessage >>= processSample >>= mapM_ collectData >> ackLast
     collectData (addr, sd, ts, p) = do
         collectSource addr sd
         collectSimple (SimplePoint addr ts p)
-    ack = do
-        (_, CeilometerState{..}) <- get
-        liftIO $ send zmqSocket [] ""
 
 -- | Blocking read from ceilometer-publisher-zeromq
 retrieveMessage :: Collector L.ByteString
 retrieveMessage = do
     (_, CeilometerState{..}) <- get
     liftIO $ L.fromStrict <$> receive zmqSocket
+
+-- | Ack last message received from ceilometer-publisher-zeromq
+ackLast :: Collector ()
+ackLast = do
+    (_, CeilometerState{..}) <- get
+    liftIO $ send zmqSocket [] ""
 
 -- | Takes in a JSON Object and processes it into a list of
 --   (Address, SourceDict, TimeStamp, Payload) tuples

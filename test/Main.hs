@@ -1,8 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module Main where
 
 import           Control.Applicative
+import           Control.Concurrent
 import           Control.Monad.Reader
 import           Data.Aeson
 import           Data.Bits
@@ -12,7 +14,8 @@ import qualified Data.HashMap.Strict                    as H
 import           Data.Monoid
 import           Data.Text                              (Text)
 import           Data.Word
-import           Test.Hspec
+import           System.ZMQ4
+import           Test.Hspec                             hiding (context)
 import           Test.HUnit.Base
 
 import qualified Vaultaire.Collector.Common.Process     as V (runNullCollector)
@@ -22,9 +25,21 @@ import           Vaultaire.Types
 import           Vaultaire.Collector.Ceilometer.Process
 import           Vaultaire.Collector.Ceilometer.Types
 
+nullCommonOpts :: CommonOpts
+nullCommonOpts = CommonOpts undefined undefined undefined undefined undefined
+
 -- Convenience run function
 runNullCollector :: Collector a -> IO a
-runNullCollector = V.runNullCollector (CommonOpts undefined undefined undefined undefined undefined, CeilometerOptions undefined undefined) (\_ -> return $ CeilometerState undefined undefined) (return ())
+runNullCollector =
+    V.runNullCollector (nullCommonOpts, CeilometerOptions undefined undefined)
+                       (\_ -> return $ CeilometerState undefined undefined)
+                       (return ())
+
+runIntegrationCollector :: Collector a -> IO a
+runIntegrationCollector =
+    V.runNullCollector (nullCommonOpts, CeilometerOptions "127.0.0.1" 8282)
+                       initState
+                       cleanup
 
 -- Volume Events
 expectedVolumePayload :: Word64
@@ -336,39 +351,26 @@ suite = do
         it "Ignores specifically sized instance pollsters" testIgnoreSizedInstances
     describe "Utility" $
         it "Processes timestamps correctly" testTimeStamp
-{-    describe "Processing Errors" $
-        it "Processes openstack error messages" testError
     describe "Integration" $
-        it "Successfully gets metrics from RabbitMQ and processes them" testMetricIntegration
--}
+        it "Successfully gets metrics via ZeroMQ and processes them" testMetricIntegration
+
 main :: IO ()
 main = hspec suite
-{-
+
 testMetricIntegration :: IO ()
 testMetricIntegration = do
     rawJSON <- BSL.readFile "test/json_files/volume.json"
-    let testExchange = "metric-test-exchange"
-    runIntegrationCollector testExchange "metric-test-queue" $ do
+    _ <- forkIO $ do
+        c <- context
+        sock <- socket c Req
+        connect sock "tcp://127.0.0.1:8282"
+        send sock [] (BSL.toStrict rawJSON)
+        void $ receive sock
+    runIntegrationCollector $ do
         (_, CeilometerOptions{..}) <- ask
-        liftIO $ do
-            -- Setup an additional connection to manually send messages
-            conn <- openConnection rabbitHost rabbitVHost "guest" "guest"
-            chan <- openChannel conn
-            declareExchange chan (newExchange{exchangeName = testExchange, exchangeType = "fanout"})
-            _ <- declareQueue chan (newQueue{queueName = rabbitQueue})
-            bindQueue chan rabbitQueue testExchange "/"
-            -- Publish the test message
-            publishMsg chan testExchange "" (newMsg{msgBody = rawJSON})
-            -- Cleanup
-            closeConnection conn
-        msg <- retrieveMessage
-        case msg of
-            Nothing -> liftIO $ assertFailure "Expected there to be a message in the queue"
-            Just (msg', env) -> do
-                processedVolume <- processSample msg'
-                liftIO $ verifyVolume processedVolume
-                liftIO $ ackEnv env
--}
+        processedVolume <- retrieveMessage >>= processSample
+        ackLast
+        liftIO $ verifyVolume processedVolume
 
 verifyVolume :: [(Address, SourceDict, TimeStamp, Word64)] -> IO ()
 verifyVolume [(_, sd, ts, p)] = do

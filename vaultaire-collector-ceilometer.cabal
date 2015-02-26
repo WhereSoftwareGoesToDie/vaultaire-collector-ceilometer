@@ -91,7 +91,7 @@ test-suite           tests
                      QuickCheck,
                      bytestring,
                      text,
-                     amqp,
+                     zeromq4-haskell,
                      unordered-containers,
                      vaultaire-collector-ceilometer,
                      vaultaire-common,
