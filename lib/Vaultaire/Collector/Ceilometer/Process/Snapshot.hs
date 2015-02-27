@@ -15,7 +15,7 @@ import           System.Log.Logger
 import           Vaultaire.Collector.Ceilometer.Process.Common
 import           Vaultaire.Collector.Ceilometer.Types
 
-processSnapshotSizeEvent :: Metric -> PublicationData
+processSnapshotSizeEvent :: Metric -> Collector [(Address, SourceDict, TimeStamp, Word64)]
 processSnapshotSizeEvent = processEvent getSnapshotSizePayload
 
 -- | Constructs the compound payload for ip allocation events

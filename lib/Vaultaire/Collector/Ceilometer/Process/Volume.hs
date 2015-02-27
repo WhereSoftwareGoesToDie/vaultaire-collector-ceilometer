@@ -15,7 +15,7 @@ import           System.Log.Logger
 import           Vaultaire.Collector.Ceilometer.Process.Common
 import           Vaultaire.Collector.Ceilometer.Types
 
-processVolumeEvent :: Metric -> PublicationData
+processVolumeEvent :: Metric -> Collector [(Address, SourceDict, TimeStamp, Word64)]
 processVolumeEvent = processEvent getVolumePayload
 
 -- | Constructs the compound payload for volume events

@@ -14,7 +14,7 @@ import           System.Log.Logger
 import           Vaultaire.Collector.Ceilometer.Process.Common
 import           Vaultaire.Collector.Ceilometer.Types
 
-processIpEvent :: Metric -> PublicationData
+processIpEvent :: Metric -> Collector [(Address, SourceDict, TimeStamp, Word64)]
 processIpEvent = processEvent getIpPayload
 
 -- | An allocation has no 'value' per se, so we arbitarily use 1

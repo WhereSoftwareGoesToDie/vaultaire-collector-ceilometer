@@ -15,7 +15,7 @@ import           System.Log.Logger
 import           Vaultaire.Collector.Ceilometer.Process.Common
 import           Vaultaire.Collector.Ceilometer.Types
 
-processImageSizeEvent :: Metric -> PublicationData
+processImageSizeEvent :: Metric -> Collector [(Address, SourceDict, TimeStamp, Word64)]
 processImageSizeEvent = processEvent getImagePayload
 
 -- | Constructs the compound payload for image events
