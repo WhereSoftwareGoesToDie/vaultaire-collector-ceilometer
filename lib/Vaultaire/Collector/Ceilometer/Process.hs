@@ -113,19 +113,19 @@ process m = process' (metricName m) (isEvent m)
   where
 -- Supported metrics
     -- We process both instance pollsters and events
-    process' "instance"                   False = processInstancePollster   m
-    process' "instance"                   True  = processInstanceEvent      m
-    process' "cpu"                        False = processBasePollster       m
-    process' "disk.write.bytes"           False = processBasePollster       m
-    process' "disk.read.bytes"            False = processBasePollster       m
-    process' "network.incoming.bytes"     False = processBasePollster       m
-    process' "network.outgoing.bytes"     False = processBasePollster       m
-    process' "ip.floating"                True  = processIpEvent            m
-    process' "volume.size"                True  = processVolumeEvent        m
+    process' "instance"                   False = yell >> processInstancePollster   m
+    process' "instance"                   True  = yell >> processInstanceEvent      m
+    process' "cpu"                        False = yell >> processBasePollster       m
+    process' "disk.write.bytes"           False = yell >> processBasePollster       m
+    process' "disk.read.bytes"            False = yell >> processBasePollster       m
+    process' "network.incoming.bytes"     False = yell >> processBasePollster       m
+    process' "network.outgoing.bytes"     False = yell >> processBasePollster       m
+    process' "ip.floating"                True  = yell >> processIpEvent            m
+    process' "volume.size"                True  = yell >> processVolumeEvent        m
     -- We process both image.size pollsters and events
-    process' "image.size"                 False = processBasePollster       m
-    process' "image.size"                 True  = processImageSizeEvent     m
-    process' "snapshot.size"              True  = processSnapshotSizeEvent  m
+    process' "image.size"                 False = yell >> processBasePollster       m
+    process' "image.size"                 True  = yell >> processImageSizeEvent     m
+    process' "snapshot.size"              True  = yell >> processSnapshotSizeEvent  m
 
     -- Ignored metrics
     -- Tracking both disk.r/w and disk.device.r/w will most likely double count
@@ -187,6 +187,9 @@ process m = process' (metricName m) (isEvent m)
         liftIO $ infoM "Ceilometer.Process.processSample" $
             "Ignored metric: " <> show x <> " event: " <> show y
         return []
+    yell =
+        liftIO $ infoM "Ceilometer.Process.processSample" $
+            "Process metric: " <> show (metricName m) <> " event: " <> show (isEvent m) <> " resource-id: " <> show (metricResourceId m)
     alert x y = do
         liftIO $ alertM "Ceilometer.Process.processSample" $
             "Unexpected metric: " <> show x <> " event: " <> show y <>

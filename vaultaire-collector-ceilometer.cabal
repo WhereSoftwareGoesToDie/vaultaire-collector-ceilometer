@@ -1,5 +1,5 @@
 name:                vaultaire-collector-ceilometer
-version:             0.5.0
+version:             0.5.1
 synopsis:            Vaultaire Collectors for Openstack/Ceilometer
 description:         Provides two collectors for openstack/ceilometer.
                      vaultaire-collector-ceilometer collects metric data from
