@@ -189,7 +189,7 @@ process m = process' (metricName m) (isEvent m)
         return []
     yell =
         liftIO $ infoM "Ceilometer.Process.processSample" $
-            "Process metric: " <> show (metricName m) <> " event: " <> show (isEvent m)
+            "Process metric: " <> show (metricName m) <> " event: " <> show (isEvent m) <> " resource-id: " <> show (metricResourceId m)
     alert x y = do
         liftIO $ alertM "Ceilometer.Process.processSample" $
             "Unexpected metric: " <> show x <> " event: " <> show y <>
