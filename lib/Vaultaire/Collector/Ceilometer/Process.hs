@@ -87,7 +87,9 @@ runCollector = V.runCollector parseOptions initState cleanup publishSamples
 retrieveMessage :: Collector L.ByteString
 retrieveMessage = do
     (_, CeilometerState{..}) <- get
-    liftIO $ L.fromStrict <$> receive zmqSocket
+    x <- liftIO $ L.fromStrict <$> receive zmqSocket
+    liftIO $ infoM "" $ "Received bytestring: " <> show x
+    return x
 
 -- | Ack last message received from ceilometer-publisher-zeromq
 ackLast :: Collector ()
@@ -104,7 +106,9 @@ processSample bs =
             liftIO $ alertM "Ceilometer.Process.processSample" $
                 "Failed to parse: " <> L.unpack bs <> " Error: " <> e
             return []
-        Right m -> process m
+        Right m -> do
+            liftIO $ infoM "" $ "Successfully decoded: " <> show m
+            process m
 
 -- | Primary processing function, converts a parsed Ceilometer metric
 --   into a list of vaultaire SimplePoint and SourceDict data
