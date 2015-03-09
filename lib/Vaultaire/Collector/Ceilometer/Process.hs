@@ -88,7 +88,7 @@ retrieveMessage :: Collector L.ByteString
 retrieveMessage = do
     (_, CeilometerState{..}) <- get
     x <- liftIO $ L.fromStrict <$> receive zmqSocket
-    liftIO $ infoM "" $ "Received bytestring: " <> show x
+    liftIO $ infoM "Ceilometer.Process.retrieveMessage" $ "Received bytestring: " <> show x
     return x
 
 -- | Ack last message received from ceilometer-publisher-zeromq
@@ -107,7 +107,7 @@ processSample bs =
                 "Failed to parse: " <> L.unpack bs <> " Error: " <> e
             return []
         Right m -> do
-            liftIO $ infoM "" $ "Successfully decoded: " <> show m
+            liftIO $ infoM "Ceilometer.Process.processSample" $ "Successfully decoded: " <> show m
             process m
 
 -- | Primary processing function, converts a parsed Ceilometer metric
