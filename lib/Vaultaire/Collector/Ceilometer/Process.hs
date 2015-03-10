@@ -45,7 +45,6 @@ parseOptions = CeilometerOptions
     <$> strOption
         (long "publisher-host"
          <> short 'H'
-
          <> metavar "HOSTNAME"
          <> help "ceilometer-publisher-zeromq host")
     <*> option auto
@@ -58,11 +57,17 @@ parseOptions = CeilometerOptions
 -- | Initialise ZMQ socket and context
 initState :: CollectorOpts CeilometerOptions -> IO CeilometerState
 initState (_, CeilometerOptions{..}) = do
+    -- Make logging loggier.
+    updateGlobalLogger rootLoggerName $ setLevel DEBUG
+    -- Start ZMQ networking.
     c <- context
     sock <- socket c Rep
     let connString = "tcp://" <> zmqHost <> ":" <> show zmqPort
     bind sock connString
-    infoM "Ceilometer.Process.initState" $ "Listening to publishers at " <> connString
+    putStrLn $ "[Ceilometer.Process.initState] " <>
+        "Listening to publishers at " <> connString
+    infoM "Ceilometer.Process.initState" $
+        "Listening to publishers at " <> connString
     return $ CeilometerState sock c
 
 -- | Cleans up ZMQ socket and context
@@ -88,7 +93,10 @@ retrieveMessage :: Collector L.ByteString
 retrieveMessage = do
     (_, CeilometerState{..}) <- get
     x <- liftIO $ L.fromStrict <$> receive zmqSocket
-    liftIO $ debugM "Ceilometer.Process.retrieveMessage" $ "Received bytestring: " <> show x
+    liftIO . putStrLn $ "[Ceilometer.Process.retrieveMessage] " <>
+        "Received bytestring: " <> show x
+    liftIO . debugM "Ceilometer.Process.retrieveMessage" $
+        "Received bytestring: " <> show x
     return x
 
 -- | Ack last message received from ceilometer-publisher-zeromq
@@ -103,11 +111,16 @@ processSample :: L.ByteString -> Collector [(Address, SourceDict, TimeStamp, Wor
 processSample bs =
     case eitherDecode bs of
         Left e  -> do
-            liftIO $ alertM "Ceilometer.Process.processSample" $
+            liftIO . putStrLn $ "[Ceilometer.Process.processSample] " <>
+                "Failed to parse: " <> L.unpack bs <> " Error: " <> e
+            liftIO . alertM "Ceilometer.Process.processSample" $
                 "Failed to parse: " <> L.unpack bs <> " Error: " <> e
             return []
         Right m -> do
-            liftIO $ debugM "Ceilometer.Process.processSample" $ "Successfully decoded: " <> show m
+            liftIO . putStrLn $ "[Ceilometer.Process.processSample] " <>
+                "Successfully decoded: " <> show m
+            liftIO . debugM "Ceilometer.Process.processSample" $
+                "Successfully decoded: " <> show m
             process m
 
 -- | Primary processing function, converts a parsed Ceilometer metric
@@ -188,14 +201,23 @@ process m = process' (metricName m) (isEvent m)
         | "instance:" `T.isPrefixOf` x = ignore x y
         | otherwise = alert x y
     ignore x y = do
-        liftIO $ infoM "Ceilometer.Process.processSample" $
+        liftIO . putStrLn $ "[Ceilometer.Process.processSample] " <>
+            "Ignored metric: " <> show x <> " event: " <> show y
+        liftIO . infoM "Ceilometer.Process.processSample" $
             "Ignored metric: " <> show x <> " event: " <> show y
         return []
-    yell =
-        liftIO $ infoM "Ceilometer.Process.processSample" $
-            "Process metric: " <> show (metricName m) <> " event: " <> show (isEvent m) <> " resource-id: " <> show (metricResourceId m)
+    yell = do
+        liftIO . putStrLn $ "[Ceilometer.Process.processSample] " <>
+            "Process metric: " <> show (metricName m) <> " event: " <>
+            show (isEvent m) <> " resource-id: " <> show (metricResourceId m)
+        liftIO . infoM "Ceilometer.Process.processSample" $
+            "Process metric: " <> show (metricName m) <> " event: " <>
+            show (isEvent m) <> " resource-id: " <> show (metricResourceId m)
     alert x y = do
-        liftIO $ alertM "Ceilometer.Process.processSample" $
+        liftIO . putStrLn $ "[Ceilometer.Process.processSample] " <>
+            "Unexpected metric: " <> show x <> " event: " <> show y <>
+            "\n" <> show m
+        liftIO . alertM "Ceilometer.Process.processSample" $
             "Unexpected metric: " <> show x <> " event: " <> show y <>
             "\n" <> show m
         return []

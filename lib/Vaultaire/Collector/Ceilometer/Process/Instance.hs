@@ -42,6 +42,10 @@ processInstancePollster m@Metric{..} = do
         case H.lookup "flavor" metricMetadata of
             Just flavor -> case fromJSON flavor of
                 Error e -> do
+                    liftIO . putStrLn $
+                        "[Ceilometer.Process.processInstancePollster] " <>
+                        "Failed to parse flavor sub-object for instance pollster" <>
+                        show e
                     liftIO $ alertM "Ceilometer.Process.processInstancePollster" $
                         "Failed to parse flavor sub-object for instance pollster" <> show e
                     return []
@@ -51,10 +55,15 @@ processInstancePollster m@Metric{..} = do
                         Just ps -> return $ zip4 addrs sds (repeat metricTimeStamp) ps
                         Nothing -> return []
             Nothing -> do
+                liftIO . putStrLn $
+                    "[Ceilometer.Process.processInstancePollster]" <>
+                    "Flavor sub-object missing from instance pollster"
                 liftIO $ alertM "Ceilometer.Process.processInstancePollster"
                                 "Flavor sub-object missing from instance pollster"
                 return []
     else do
+        liftIO . putStrLn $ "Ceilometer.Process.processInstance" <>
+            "Failure to convert all sourceMaps to SourceDicts for instance pollster"
         liftIO $ alertM "Ceilometer.Process.processInstance"
             "Failure to convert all sourceMaps to SourceDicts for instance pollster"
         return []
@@ -68,20 +77,29 @@ getInstancePayloads Metric{..} Flavor{..} = do
     st <- case H.lookup "status" metricMetadata of
         Just (String status) -> return $ Just status
         Just x -> do
+            putStrLn $ "[Ceilometer.Process.getInstancePayloads] " <>
+                 "Invalid parse of status for instance pollster" <> show x
             alertM "Ceilometer.Process.getInstancePayloads"
                  $ "Invalid parse of status for instance pollster" <> show x
             return Nothing
         Nothing -> do
+            putStrLn $ "[Ceilometer.Process.getInstancePayloads] " <>
+                   "Status field missing from instance pollster"
             alertM "Ceilometer.Process.getInstancePayloads"
                    "Status field missing from instance pollster"
             return Nothing
     ty <- case H.lookup "instance_type" metricMetadata of
         Just (String instanceType) -> return $ Just instanceType
         Just x -> do
+            putStrLn $ "[Ceilometer.Process.getInstancePayloads] " <>
+                 "Invalid parse of instance_type for instance pollster: " <>
+                 show x
             alertM "Ceilometer.Process.getInstancePayloads"
                  $ "Invalid parse of instance_type for instance pollster: " <> show x
             return Nothing
         Nothing -> do
+            putStrLn $ "[Ceilometer.Process.getInstancePayloads] " <>
+                   "instance_type field missing from instance pollster"
             alertM "Ceilometer.Process.getInstancePayloads"
                    "instance_type field missing from instance pollster"
             return Nothing
@@ -114,6 +132,9 @@ getInstancePayloads Metric{..} Flavor{..} = do
                 "rescue"            -> return 17
                 "migrating"         -> return 18
                 x                   -> do
+                    putStrLn $ "[Ceilometer.Process.getInstancePayloads] " <>
+                         "Invalid status for instance pollster: " <>
+                         show x
                     alertM "Ceilometer.Process.getInstancePayloads"
                          $ "Invalid status for instance pollster: " <> show x
                     return (-1)

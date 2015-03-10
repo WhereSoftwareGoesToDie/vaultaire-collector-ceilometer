@@ -69,6 +69,9 @@ getSourceMap m@Metric{..} =
 mapToSourceDict :: HashMap Text Text -> IO (Maybe SourceDict)
 mapToSourceDict sourceMap = case makeSourceDict sourceMap of
     Left err -> do
+        putStrLn $ "[Ceilometer.Process.getSourceDict] " <>
+            "Failed to create sourcedict from " <> show sourceMap <>
+            " error: " <> err
         alertM "Ceilometer.Process.getSourceDict" $
             "Failed to create sourcedict from " <> show sourceMap <> " error: " <> err
         return Nothing
@@ -131,6 +134,10 @@ processEvent f m@Metric{..} = do
         -- Sub functions will alert, alerts cause termination by default
         -- so this case should not be reached
         Nothing -> do
+            liftIO . putStrLn $ "[Ceilometer.Process.processEvent] " <>
+                "Impossible control flow reached in processEvent. Given: " <>
+                show m
             liftIO $ errorM "Ceilometer.Process.processEvent" $
-                            "Impossible control flow reached in processEvent. Given: " ++ show m
+                "Impossible control flow reached in processEvent. Given: " <>
+                show m
             return []
