@@ -24,28 +24,20 @@ getImagePayload m@Metric{..} = do
     v <- case T.splitOn "." <$> getEventType m of
         Just (_:verb:_) -> return $ Just verb
         Just x -> do
-            putStrLn $ "[Ceilometer.Process.getImagePayload] " <>
-                 "Invalid parse of verb for image event" <> show x
             alertM "Ceilometer.Process.getImagePayload"
                  $ "Invalid parse of verb for image event" <> show x
             return Nothing
         Nothing -> do
-            putStrLn $ "[Ceilometer.Process.getImagePayload] " <>
-                   "event_type field missing from image event"
             alertM "Ceilometer.Process.getImagePayload"
                    "event_type field missing from image event"
             return Nothing
     st <- case H.lookup "status" metricMetadata of
         Just (String status) -> return $ Just status
         Just x -> do
-            putStrLn $ "[Ceilometer.Process.getImagePayload] " <>
-                 "Invalid parse of status for image event" <> show x
             alertM "Ceilometer.Process.getImagePayload"
                  $ "Invalid parse of status for image event" <> show x
             return Nothing
         Nothing -> do
-            putStrLn $ "[Ceilometer.Process.getImagePayload]" <>
-                   "Status field missing from image event"
             alertM "Ceilometer.Process.getImagePayload"
                    "Status field missing from image event"
             return Nothing
@@ -59,8 +51,6 @@ getImagePayload m@Metric{..} = do
                 "pending_delete" -> return 5
                 "killed"         -> return 6
                 x        -> do
-                    putStrLn $ "Ceilometer.Process.getImagePayload" <>
-                           "Invalid status for image event: " <> show x
                     alertM "Ceilometer.Process.getImagePayload" $
                            "Invalid status for image event: " <> show x
                     return (-1)
@@ -71,8 +61,6 @@ getImagePayload m@Metric{..} = do
                 "download" -> return 4
                 "delete"   -> return 5
                 x          -> do
-                    putStrLn $ "Ceilometer.Process.getImagePayload" <>
-                        "Invalid verb for image event: " <> show x
                     alertM "Ceilometer.Process.getImagePayload" $
                         "Invalid verb for image event: " <> show x
                     return (-1)

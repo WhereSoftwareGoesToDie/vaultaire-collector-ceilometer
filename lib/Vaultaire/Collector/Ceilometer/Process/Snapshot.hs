@@ -24,29 +24,20 @@ getSnapshotSizePayload m@Metric{..} = do
     components <- case T.splitOn "." <$> getEventType m of
         Just (_:verb:endpoint:__) -> return $ Just (verb, endpoint)
         Just x -> do
-            putStrLn $ "[Ceilometer.Process.getSnapshotSizePayload] " <>
-                 "Invalid parse of verb + endpoint for snapshot size event" <>
-                 show x
             alertM "Ceilometer.Process.getSnapshotSizePayload"
                  $ "Invalid parse of verb + endpoint for snapshot size event" <> show x
             return Nothing
         Nothing -> do
-            putStrLn $ "[Ceilometer.Process.getSnapshotSizePayload] " <>
-                   "event_type field missing from snapshot size event"
             alertM "Ceilometer.Process.getSnapshotSizePayload"
                    "event_type field missing from snapshot size event"
             return Nothing
     st <- case H.lookup "status" metricMetadata of
         Just (String status) -> return $ Just status
         Just x -> do
-            putStrLn $ "[Ceilometer.Process.getSnapshotSizePayload] " <>
-                 "Invalid parse of status for snapshot size event" <> show x
             alertM "Ceilometer.Process.getSnapshotSizePayload"
                  $ "Invalid parse of status for snapshot size event" <> show x
             return Nothing
         Nothing -> do
-            putStrLn $ "[Ceilometer.Process.getSnapshotSizePayload] " <>
-                   "Status field missing from snapshot size event"
             alertM "Ceilometer.Process.getSnapshotSizePayload"
                    "Status field missing from snapshot size event"
             return Nothing
@@ -58,8 +49,6 @@ getSnapshotSizePayload m@Metric{..} = do
                 "creating"  -> return 2
                 "deleting"  -> return 3
                 x           -> do
-                    putStrLn $ "[Ceilometer.Process.getSnapshotSizePayload] " <>
-                        "Invalid status for snapshot size event: " <> show x
                     alertM "Ceilometer.Process.getSnapshotSizePayload" $
                         "Invalid status for snapshot size event: " <> show x
                     return (-1)
@@ -68,8 +57,6 @@ getSnapshotSizePayload m@Metric{..} = do
                 "update" -> return 2
                 "delete" -> return 3
                 x        -> do
-                    putStrLn $ "[Ceilometer.Process.getSnapshotSizePayload] " <>
-                        "Invalid verb for snapshot size event: " <> show x
                     alertM "Ceilometer.Process.getSnapshotSizePayload" $
                         "Invalid verb for snapshot size event: " <> show x
                     return (-1)
@@ -77,8 +64,6 @@ getSnapshotSizePayload m@Metric{..} = do
                 "start" -> return 1
                 "end"   -> return 2
                 x       -> do
-                    putStrLn $ "[Ceilometer.Process.getSnapshotSizePayload] " <>
-                        "Invalid endpoint for snapshot size event: " <> show x
                     alertM "Ceilometer.Process.getSnapshotSizePayload" $
                         "Invalid endpoint for snapshot size event: " <> show x
                     return (-1)

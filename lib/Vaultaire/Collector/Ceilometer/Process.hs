@@ -57,17 +57,11 @@ parseOptions = CeilometerOptions
 -- | Initialise ZMQ socket and context
 initState :: CollectorOpts CeilometerOptions -> IO CeilometerState
 initState (_, CeilometerOptions{..}) = do
-    -- Make logging loggier.
-    updateGlobalLogger rootLoggerName $ setLevel DEBUG
-    -- Start ZMQ networking.
     c <- context
     sock <- socket c Rep
     let connString = "tcp://" <> zmqHost <> ":" <> show zmqPort
     bind sock connString
-    putStrLn $ "[Ceilometer.Process.initState] " <>
-        "Listening to publishers at " <> connString
-    infoM "Ceilometer.Process.initState" $
-        "Listening to publishers at " <> connString
+    infoM "Ceilometer.Process.initState" $ "Listening to publishers at " <> connString
     return $ CeilometerState sock c
 
 -- | Cleans up ZMQ socket and context
@@ -92,12 +86,7 @@ runCollector = V.runCollector parseOptions initState cleanup publishSamples
 retrieveMessage :: Collector L.ByteString
 retrieveMessage = do
     (_, CeilometerState{..}) <- get
-    x <- liftIO $ L.fromStrict <$> receive zmqSocket
-    liftIO . putStrLn $ "[Ceilometer.Process.retrieveMessage] " <>
-        "Received bytestring: " <> show x
-    liftIO . debugM "Ceilometer.Process.retrieveMessage" $
-        "Received bytestring: " <> show x
-    return x
+    liftIO $ L.fromStrict <$> receive zmqSocket
 
 -- | Ack last message received from ceilometer-publisher-zeromq
 ackLast :: Collector ()
@@ -111,17 +100,10 @@ processSample :: L.ByteString -> Collector [(Address, SourceDict, TimeStamp, Wor
 processSample bs =
     case eitherDecode bs of
         Left e  -> do
-            liftIO . putStrLn $ "[Ceilometer.Process.processSample] " <>
-                "Failed to parse: " <> L.unpack bs <> " Error: " <> e
-            liftIO . alertM "Ceilometer.Process.processSample" $
+            liftIO $ alertM "Ceilometer.Process.processSample" $
                 "Failed to parse: " <> L.unpack bs <> " Error: " <> e
             return []
-        Right m -> do
-            liftIO . putStrLn $ "[Ceilometer.Process.processSample] " <>
-                "Successfully decoded: " <> show m
-            liftIO . debugM "Ceilometer.Process.processSample" $
-                "Successfully decoded: " <> show m
-            process m
+        Right m -> process m
 
 -- | Primary processing function, converts a parsed Ceilometer metric
 --   into a list of vaultaire SimplePoint and SourceDict data
@@ -130,19 +112,19 @@ process m = process' (metricName m) (isEvent m)
   where
 -- Supported metrics
     -- We process both instance pollsters and events
-    process' "instance"                   False = yell >> processInstancePollster   m
-    process' "instance"                   True  = yell >> processInstanceEvent      m
-    process' "cpu"                        False = yell >> processBasePollster       m
-    process' "disk.write.bytes"           False = yell >> processBasePollster       m
-    process' "disk.read.bytes"            False = yell >> processBasePollster       m
-    process' "network.incoming.bytes"     False = yell >> processBasePollster       m
-    process' "network.outgoing.bytes"     False = yell >> processBasePollster       m
-    process' "ip.floating"                True  = yell >> processIpEvent            m
-    process' "volume.size"                True  = yell >> processVolumeEvent        m
+    process' "instance"                   False = processInstancePollster   m
+    process' "instance"                   True  = processInstanceEvent      m
+    process' "cpu"                        False = processBasePollster       m
+    process' "disk.write.bytes"           False = processBasePollster       m
+    process' "disk.read.bytes"            False = processBasePollster       m
+    process' "network.incoming.bytes"     False = processBasePollster       m
+    process' "network.outgoing.bytes"     False = processBasePollster       m
+    process' "ip.floating"                True  = processIpEvent            m
+    process' "volume.size"                True  = processVolumeEvent        m
     -- We process both image.size pollsters and events
-    process' "image.size"                 False = yell >> processBasePollster       m
-    process' "image.size"                 True  = yell >> processImageSizeEvent     m
-    process' "snapshot.size"              True  = yell >> processSnapshotSizeEvent  m
+    process' "image.size"                 False = processBasePollster       m
+    process' "image.size"                 True  = processImageSizeEvent     m
+    process' "snapshot.size"              True  = processSnapshotSizeEvent  m
 
     -- Ignored metrics
     -- Tracking both disk.r/w and disk.device.r/w will most likely double count
@@ -201,23 +183,11 @@ process m = process' (metricName m) (isEvent m)
         | "instance:" `T.isPrefixOf` x = ignore x y
         | otherwise = alert x y
     ignore x y = do
-        liftIO . putStrLn $ "[Ceilometer.Process.processSample] " <>
-            "Ignored metric: " <> show x <> " event: " <> show y
-        liftIO . infoM "Ceilometer.Process.processSample" $
+        liftIO $ infoM "Ceilometer.Process.processSample" $
             "Ignored metric: " <> show x <> " event: " <> show y
         return []
-    yell = do
-        liftIO . putStrLn $ "[Ceilometer.Process.processSample] " <>
-            "Process metric: " <> show (metricName m) <> " event: " <>
-            show (isEvent m) <> " resource-id: " <> show (metricResourceId m)
-        liftIO . infoM "Ceilometer.Process.processSample" $
-            "Process metric: " <> show (metricName m) <> " event: " <>
-            show (isEvent m) <> " resource-id: " <> show (metricResourceId m)
     alert x y = do
-        liftIO . putStrLn $ "[Ceilometer.Process.processSample] " <>
-            "Unexpected metric: " <> show x <> " event: " <> show y <>
-            "\n" <> show m
-        liftIO . alertM "Ceilometer.Process.processSample" $
+        liftIO $ alertM "Ceilometer.Process.processSample" $
             "Unexpected metric: " <> show x <> " event: " <> show y <>
             "\n" <> show m
         return []
