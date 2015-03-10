@@ -27,14 +27,10 @@ getIpPayload m@Metric{..} = do
     components <- case T.splitOn "." <$> getEventType m of
         Just (_:verb:endpoint:_) -> return $ Just (verb, endpoint)
         Just x -> do
-            putStrLn $ "[Ceilometer.Process.getIpPayload] " <>
-                 "Invalid parse of verb + endpoint for ip event" <> show x
             alertM "Ceilometer.Process.getIpPayload"
                  $ "Invalid parse of verb + endpoint for ip event" <> show x
             return Nothing
         Nothing -> do
-            putStrLn $ "[Ceilometer.Process.getIpPayload] " <>
-                   "event_type field missing from ip event"
             alertM "Ceilometer.Process.getIpPayload"
                    "event_type field missing from ip event"
             return Nothing
@@ -47,8 +43,6 @@ getIpPayload m@Metric{..} = do
                 Just (String "ACTIVE") -> return 1
                 Just (String "DOWN")   -> return 2
                 Just x                 -> do
-                    putStrLn $ "[Ceilometer.Process.getIpPayload] " <>
-                        "Invalid status for ip event: " <> show x
                     alertM "Ceilometer.Process.getIpPayload" $
                         "Invalid status for ip event: " <> show x
                     return (-1)
@@ -57,8 +51,6 @@ getIpPayload m@Metric{..} = do
                 "update" -> return 2
                 "delete" -> return 3
                 x        -> do
-                    putStrLn $ "[Ceilometer.Process.getIpPayload] " <>
-                        "Invalid verb for ip event: " <> show x
                     alertM "Ceilometer.Process.getIpPayload" $
                         "Invalid verb for ip event: " <> show x
                     return (-1)
@@ -66,8 +58,6 @@ getIpPayload m@Metric{..} = do
                 "start" -> return 1
                 "end"   -> return 2
                 x       -> do
-                    putStrLn $ "[Ceilometer.Process.getIpPayload] " <>
-                        "Invalid endpoint for ip event: " <> show x
                     alertM "Ceilometer.Process.getIpPayload" $
                         "Invalid endpoint for ip event: " <> show x
                     return (-1)

@@ -24,28 +24,20 @@ getVolumePayload m@Metric{..} = do
     components <- case T.splitOn "." <$> getEventType m of
         Just (_:verb:endpoint:__) -> return $ Just (verb, endpoint)
         Just x -> do
-            putStrLn $ "[Ceilometer.Process.getVolumePayload] " <>
-                 "Invalid parse of verb + endpoint for volume event" <> show x
             alertM "Ceilometer.Process.getVolumePayload"
                  $ "Invalid parse of verb + endpoint for volume event" <> show x
             return Nothing
         Nothing -> do
-            putStrLn $ "[Ceilometer.Process.getVolumePayload] " <>
-                   "event_type field missing from volume event"
             alertM "Ceilometer.Process.getVolumePayload"
                    "event_type field missing from volume event"
             return Nothing
     st <- case H.lookup "status" metricMetadata of
         Just (String status) -> return $ Just status
         Just x -> do
-            putStrLn $ "Ceilometer.Process.getVolumePayload" <>
-                 "Invalid parse of status for volume event" <> show x
             alertM "Ceilometer.Process.getVolumePayload"
                  $ "Invalid parse of status for volume event" <> show x
             return Nothing
         Nothing -> do
-            putStrLn $ "[Ceilometer.Process.getVolumePayload] " <>
-                   "Status field missing from volume event"
             alertM "Ceilometer.Process.getVolumePayload"
                    "Status field missing from volume event"
             return Nothing
@@ -63,8 +55,6 @@ getVolumePayload m@Metric{..} = do
                 "retyping"  -> return 8
                 "uploading" -> return 9
                 x           -> do
-                    putStrLn $ "[Ceilometer.Process.getVolumePayload] " <>
-                        "Invalid status for volume event: " <> show x
                     alertM "Ceilometer.Process.getVolumePayload" $
                         "Invalid status for volume event: " <> show x
                     return (-1)
@@ -76,8 +66,6 @@ getVolumePayload m@Metric{..} = do
                 "detach" -> return 5
                 "update" -> return 6
                 x        -> do
-                    putStrLn $ "[Ceilometer.Process.getVolumePayload] " <>
-                        "Invalid verb for volume event: " <> show x
                     alertM "Ceilometer.Process.getVolumePayload" $
                         "Invalid verb for volume event: " <> show x
                     return (-1)
@@ -85,8 +73,6 @@ getVolumePayload m@Metric{..} = do
                 "start" -> return 1
                 "end"   -> return 2
                 x       -> do
-                    putStrLn $ "[Ceilometer.Process.getVolumePayload] " <>
-                        "Invalid endpoint for volume event: " <> show x
                     alertM "Ceilometer.Process.getVolumePayload" $
                         "Invalid endpoint for volume event: " <> show x
                     return (-1)
