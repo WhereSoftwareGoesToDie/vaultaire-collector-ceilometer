@@ -82,8 +82,8 @@ getIdElements :: Metric -> Text -> [Text]
 getIdElements m@Metric{..} name =
     let base     = [metricProjectId, metricResourceId, metricUOM, metricType, name]
         event    = case getEventType m of
-            Just eventType -> ["_event", eventType]
-            Nothing        -> []
+            Just _eventType -> ["_event"]
+            Nothing         -> []
         compound = ["_compound" | isCompound m]
     in concat [base,event,compound]
 

@@ -11,6 +11,7 @@ import           Data.Bits
 import qualified Data.ByteString.Lazy.Char8             as BSL
 import           Data.HashMap.Strict                    (HashMap)
 import qualified Data.HashMap.Strict                    as H
+import           Data.Maybe
 import           Data.Monoid
 import           Data.Text                              (Text)
 import           Data.Word
@@ -349,8 +350,9 @@ suite = do
     describe "Ignoring Unsupported Metrics" $ do
         it "Ignores disk read/write requests pollsters" testIgnoreDiskRequests
         it "Ignores specifically sized instance pollsters" testIgnoreSizedInstances
-    describe "Utility" $
+    describe "Utility" $ do
         it "Processes timestamps correctly" testTimeStamp
+        it "Generates consistent addresses" testAddresses
     describe "Integration" $
         it "Successfully gets metrics via ZeroMQ and processes them" testMetricIntegration
 
@@ -371,6 +373,32 @@ testMetricIntegration = do
         processedVolume <- retrieveMessage >>= processSample
         ackLast
         liftIO $ verifyVolume processedVolume
+
+testAddresses :: IO ()
+testAddresses = runNullCollector $ do
+    addrs <- catMaybes <$> mapM extractAddress
+                    [ "test/json_files/volumes/create_start.json"
+                    , "test/json_files/volumes/create_end.json"
+                    , "test/json_files/volumes/delete_start.json"
+                    , "test/json_files/volumes/delete_end.json" ]
+    liftIO $ case addrs of
+        [x, y, z, w] -> do
+            x @?= y
+            y @?= z
+            z @?= w
+            w @?= x
+        xs -> let n = length xs in assertFailure $
+                 concat ["Expected 4 addresses, got ", show n, ": ", show addrs]
+  where
+    extractAddress fileName = do
+        rawJSON   <- liftIO $ BSL.readFile fileName
+        processed <- processSample rawJSON
+        case processed of
+            [(addr, _, _, _)] -> return $ Just addr
+            xs                -> do
+                let n = length xs
+                liftIO . assertFailure $ concat ["processedVolume has ", show n, " elements:, ", show xs, ". Expected 1"]
+                return Nothing
 
 verifyVolume :: [(Address, SourceDict, TimeStamp, Word64)] -> IO ()
 verifyVolume [(_, sd, ts, p)] = do
