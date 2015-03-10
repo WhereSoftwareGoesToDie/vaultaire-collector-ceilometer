@@ -45,7 +45,6 @@ parseOptions = CeilometerOptions
     <$> strOption
         (long "publisher-host"
          <> short 'H'
-
          <> metavar "HOSTNAME"
          <> help "ceilometer-publisher-zeromq host")
     <*> option auto
