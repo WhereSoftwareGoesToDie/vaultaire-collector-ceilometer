@@ -4,13 +4,16 @@
 module Vaultaire.Collector.Ceilometer.Process.Snapshot where
 
 import           Control.Applicative
-import           Control.Monad
+import           Control.Lens
 import           Data.Aeson
 import qualified Data.HashMap.Strict                           as H
 import           Data.Monoid
+import           Data.Text                                     (Text)
 import qualified Data.Text                                     as T
 import           Data.Word
 import           System.Log.Logger
+
+import           Ceilometer.Types
 
 import           Vaultaire.Collector.Ceilometer.Process.Common
 import           Vaultaire.Collector.Ceilometer.Types
@@ -18,11 +21,37 @@ import           Vaultaire.Collector.Ceilometer.Types
 processSnapshotSizeEvent :: Metric -> Collector [(Address, SourceDict, TimeStamp, Word64)]
 processSnapshotSizeEvent = processEvent getSnapshotSizePayload
 
+parseSnapshotStatus :: Text -> Maybe PFSnapshotStatus
+parseSnapshotStatus "error"     = Just SnapshotError
+parseSnapshotStatus "available" = Just SnapshotAvailable
+parseSnapshotStatus "creating"  = Just SnapshotCreating
+parseSnapshotStatus "deleting"  = Just SnapshotDeleting
+parseSnapshotStatus _           = Nothing
+
+parseSnapshotVerb :: Text -> Maybe PFSnapshotVerb
+parseSnapshotVerb "create" = Just SnapshotCreate
+parseSnapshotVerb "update" = Just SnapshotUpdate
+parseSnapshotVerb "delete" = Just SnapshotDelete
+parseSnapshotVerb _        = Nothing
+
 -- | Constructs the compound payload for ip allocation events
 getSnapshotSizePayload :: Metric -> IO (Maybe Word64)
 getSnapshotSizePayload m@Metric{..} = do
     components <- case T.splitOn "." <$> getEventType m of
-        Just (_:verb:endpoint:__) -> return $ Just (verb, endpoint)
+        Just (_:verb:endpoint:__) -> do
+            v <- case parseSnapshotVerb verb of
+                Just x  -> return $ Just x
+                Nothing -> do
+                    alertM "Ceilometer.Process.getSnapshotSizePayload"
+                         $ "Invalid verb for snapshot size event: " <> show verb
+                    return Nothing
+            e <- case parseEndpoint (Just endpoint) of
+                Just x  -> return $ Just x
+                Nothing -> do
+                    alertM "Ceilometer.Process.getSnapshotSizePayload"
+                         $ "Invalid endpoint for snapshot size event: " <> show endpoint
+                    return Nothing
+            return $ liftA2 (,) v e
         Just x -> do
             alertM "Ceilometer.Process.getSnapshotSizePayload"
                  $ "Invalid parse of verb + endpoint for snapshot size event" <> show x
@@ -31,8 +60,13 @@ getSnapshotSizePayload m@Metric{..} = do
             alertM "Ceilometer.Process.getSnapshotSizePayload"
                    "event_type field missing from snapshot size event"
             return Nothing
-    st <- case H.lookup "status" metricMetadata of
-        Just (String status) -> return $ Just status
+    status <- case H.lookup "status" metricMetadata of
+        Just (String status) -> case parseSnapshotStatus status of
+            Just x  -> return $ Just x
+            Nothing -> do
+                alertM "Ceilometer.Process.getSnapshotSizePayload"
+                     $ "Invalid status for snapshot size event: " <> show status
+                return Nothing
         Just x -> do
             alertM "Ceilometer.Process.getSnapshotSizePayload"
                  $ "Invalid parse of status for snapshot size event" <> show x
@@ -41,35 +75,8 @@ getSnapshotSizePayload m@Metric{..} = do
             alertM "Ceilometer.Process.getSnapshotSizePayload"
                    "Status field missing from snapshot size event"
             return Nothing
-    case liftM2 (,) components st of
-        Just ((verb, endpoint), status) -> do
-            statusValue <- case status of
-                "error"     -> return 0
-                "available" -> return 1
-                "creating"  -> return 2
-                "deleting"  -> return 3
-                x           -> do
-                    alertM "Ceilometer.Process.getSnapshotSizePayload" $
-                        "Invalid status for snapshot size event: " <> show x
-                    return (-1)
-            verbValue <- case verb of
-                "create" -> return 1
-                "update" -> return 2
-                "delete" -> return 3
-                x        -> do
-                    alertM "Ceilometer.Process.getSnapshotSizePayload" $
-                        "Invalid verb for snapshot size event: " <> show x
-                    return (-1)
-            endpointValue <- case endpoint of
-                "start" -> return 1
-                "end"   -> return 2
-                x       -> do
-                    alertM "Ceilometer.Process.getSnapshotSizePayload" $
-                        "Invalid endpoint for snapshot size event: " <> show x
-                    return (-1)
-            return $ if (-1) `elem` [statusValue, verbValue, endpointValue] then
-                Nothing
-            else case metricPayload of
-                Just p -> Just $ constructCompoundPayload statusValue verbValue endpointValue p
-                Nothing -> Nothing
-        Nothing -> return Nothing
+    return $ do
+        (v, e) <- components
+        s      <- status
+        p      <- fromIntegral <$> metricPayload
+        return $ review (prCompoundEvent . pdSnapshot) $ PDSnapshot s v e p

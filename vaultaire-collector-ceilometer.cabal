@@ -1,5 +1,5 @@
 name:                vaultaire-collector-ceilometer
-version:             0.6.1
+version:             0.7.0
 synopsis:            Vaultaire Collectors for Openstack/Ceilometer
 description:         Provides two collectors for openstack/ceilometer.
                      vaultaire-collector-ceilometer collects metric data from
@@ -35,6 +35,8 @@ library
 
   build-depends:     base >=4.7 && <4.8,
                      aeson,
+                     bimap,
+                     lens,
                      text,
                      bytestring,
                      hslogger,
@@ -48,7 +50,8 @@ library
                      old-locale,
                      bifunctors,
                      mtl,
-                     vaultaire-collector-common >= 0.4.0,
+                     ceilometer-common,
+                     vaultaire-collector-common >= 0.6.0,
                      vaultaire-common,
                      zeromq4-haskell
 
@@ -83,6 +86,7 @@ test-suite           tests
   build-depends:     base >=3 && <5,
                      containers >=0.5 && <0.6,
                      aeson,
+                     async,
                      mtl,
                      pipes,
                      time,
@@ -90,12 +94,13 @@ test-suite           tests
                      hspec,
                      QuickCheck,
                      bytestring,
+                     hslogger,
                      text,
                      zeromq4-haskell,
                      unordered-containers,
                      vaultaire-collector-ceilometer,
                      vaultaire-common,
-                     vaultaire-collector-common >= 0.4.0,
+                     vaultaire-collector-common >= 0.6.0,
                      marquise >= 3.1.0
 
   ghc-options:       -threaded

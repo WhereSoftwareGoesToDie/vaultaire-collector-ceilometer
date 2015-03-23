@@ -3,6 +3,8 @@
 
 module Vaultaire.Collector.Ceilometer.Process.Common where
 
+import           Control.Applicative
+import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Trans
 import           Crypto.MAC.SipHash                   (SipHash (..),
@@ -18,6 +20,7 @@ import qualified Data.Text.Encoding                   as T
 import           Data.Word
 import           System.Log.Logger
 
+import           Ceilometer.Types
 import           Marquise.Client
 
 import           Vaultaire.Collector.Ceilometer.Types
@@ -96,17 +99,6 @@ siphash x = let (SipHash h) = hash (SipKey 0 0) x in h
 siphash32 :: S.ByteString -> Word64
 siphash32 = (`shift` (-32)) . siphash
 
--- | Constructs a compound payload from components
-constructCompoundPayload :: Word64 -> Word64 -> Word64 -> Word64 -> Word64
-constructCompoundPayload statusValue verbValue endpointValue rawPayload =
-    let s = statusValue
-        v = verbValue `shift` 8
-        e = endpointValue `shift` 16
-        r = 0 `shift` 24
-        p = rawPayload `shift` 32
-    in
-        s + v + e + r + p
-
 -- | Processes a pollster with no special requirements
 processBasePollster :: Metric -> Collector [(Address, SourceDict, TimeStamp, Word64)]
 processBasePollster m@Metric{..} = do
@@ -134,3 +126,9 @@ processEvent f m@Metric{..} = do
             liftIO $ errorM "Ceilometer.Process.processEvent" $
                             "Impossible control flow reached in processEvent. Given: " ++ show m
             return []
+
+parseEndpoint :: Maybe Text -> Maybe PFEndpoint
+parseEndpoint (Just "start") = Just Start
+parseEndpoint (Just "end"  ) = Just End
+parseEndpoint (Just _      ) = Nothing
+parseEndpoint  Nothing       = Just Instant

@@ -4,7 +4,7 @@
 module Main where
 
 import           Control.Applicative
-import           Control.Concurrent
+import           Control.Concurrent.Async
 import           Control.Monad.Reader
 import           Data.Aeson
 import           Data.Bits
@@ -15,6 +15,7 @@ import           Data.Maybe
 import           Data.Monoid
 import           Data.Text                              (Text)
 import           Data.Word
+import           System.Timeout
 import           System.ZMQ4
 import           Test.Hspec                             hiding (context)
 import           Test.HUnit.Base
@@ -362,17 +363,24 @@ main = hspec suite
 testMetricIntegration :: IO ()
 testMetricIntegration = do
     rawJSON <- BSL.readFile "test/json_files/volume.json"
-    _ <- forkIO $ do
+    let maxTime = 5 * 10^(6 :: Int)  -- 5 seconds
+    x <- async $ do
         c <- context
         sock <- socket c Req
         connect sock "tcp://127.0.0.1:8282"
         send sock [] (BSL.toStrict rawJSON)
         void $ receive sock
-    runIntegrationCollector $ do
+    sRes <- timeout maxTime $ runIntegrationCollector $ do
         (_, CeilometerOptions{..}) <- ask
         processedVolume <- retrieveMessage >>= processSample
         ackLast
         liftIO $ verifyVolume processedVolume
+    cRes <- timeout maxTime $ wait x
+    case (sRes, cRes) of
+        (Nothing, Nothing) -> assertFailure "Both client and server timed out"
+        (Nothing, Just _ ) -> assertFailure "Client timed out"
+        (Just _ , Nothing) -> assertFailure "Server timed out"
+        (Just _ , Just _ ) -> return ()   
 
 testAddresses :: IO ()
 testAddresses = runNullCollector $ do
