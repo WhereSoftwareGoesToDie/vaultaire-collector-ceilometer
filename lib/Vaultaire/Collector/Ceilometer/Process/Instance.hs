@@ -18,17 +18,18 @@ import           Data.Word
 import           System.Log.Logger
 
 import           Ceilometer.Types                              hiding (Flavor)
+import qualified Vaultaire.Collector.Common.Types              as V (Collector)
 
 import           Vaultaire.Collector.Ceilometer.Process.Common
 import           Vaultaire.Collector.Ceilometer.Types
 
 
-processInstanceEvent :: Metric -> Collector [(Address, SourceDict, TimeStamp, Word64)]
+processInstanceEvent :: MonadIO m =>  Metric -> V.Collector o s m [(Address, SourceDict, TimeStamp, Word64)]
 processInstanceEvent _ = return [] -- See https://github.com/anchor/vaultaire-collector-ceilometer/issues/4
 
 -- | Extracts vcpu, ram, disk and flavor data from an instance pollster
 --   Publishes each of these as their own metric with their own Address
-processInstancePollster :: Metric -> Collector [(Address, SourceDict, TimeStamp, Word64)]
+processInstancePollster :: MonadIO m => Metric -> V.Collector o s m [(Address, SourceDict, TimeStamp, Word64)]
 processInstancePollster m@Metric{..} = do
     let baseMap = getSourceMap m --The sourcedict for the 4 metrics is mostly shared
     let names = ["instance_vcpus", "instance_ram", "instance_disk", "instance_flavor"]

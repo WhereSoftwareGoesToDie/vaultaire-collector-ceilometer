@@ -5,6 +5,7 @@ module Vaultaire.Collector.Ceilometer.Process.Snapshot where
 
 import           Control.Applicative
 import           Control.Lens
+import           Control.Monad.Trans
 import           Data.Aeson
 import qualified Data.HashMap.Strict                           as H
 import           Data.Monoid
@@ -14,11 +15,12 @@ import           Data.Word
 import           System.Log.Logger
 
 import           Ceilometer.Types
+import qualified Vaultaire.Collector.Common.Types              as V (Collector)
 
 import           Vaultaire.Collector.Ceilometer.Process.Common
 import           Vaultaire.Collector.Ceilometer.Types
 
-processSnapshotSizeEvent :: Metric -> Collector [(Address, SourceDict, TimeStamp, Word64)]
+processSnapshotSizeEvent :: MonadIO m => Metric -> V.Collector o s m [(Address, SourceDict, TimeStamp, Word64)]
 processSnapshotSizeEvent = processEvent getSnapshotSizePayload
 
 parseSnapshotStatus :: Text -> Maybe PFSnapshotStatus

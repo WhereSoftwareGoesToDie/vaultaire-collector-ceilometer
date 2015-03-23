@@ -380,7 +380,7 @@ testMetricIntegration = do
         (Nothing, Nothing) -> assertFailure "Both client and server timed out"
         (Nothing, Just _ ) -> assertFailure "Client timed out"
         (Just _ , Nothing) -> assertFailure "Server timed out"
-        (Just _ , Just _ ) -> return ()   
+        (Just _ , Just _ ) -> return ()
 
 testAddresses :: IO ()
 testAddresses = runNullCollector $ do
