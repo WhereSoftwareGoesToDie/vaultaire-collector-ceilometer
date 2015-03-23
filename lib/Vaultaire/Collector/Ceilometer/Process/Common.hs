@@ -3,8 +3,6 @@
 
 module Vaultaire.Collector.Ceilometer.Process.Common where
 
-import           Control.Applicative
-import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Trans
 import           Crypto.MAC.SipHash                   (SipHash (..),
@@ -22,6 +20,7 @@ import           System.Log.Logger
 
 import           Ceilometer.Types
 import           Marquise.Client
+import qualified Vaultaire.Collector.Common.Types     as V (Collector)
 
 import           Vaultaire.Collector.Ceilometer.Types
 
@@ -100,7 +99,7 @@ siphash32 :: S.ByteString -> Word64
 siphash32 = (`shift` (-32)) . siphash
 
 -- | Processes a pollster with no special requirements
-processBasePollster :: Metric -> Collector [(Address, SourceDict, TimeStamp, Word64)]
+processBasePollster :: MonadIO m => Metric -> V.Collector o s m [(Address, SourceDict, TimeStamp, Word64)]
 processBasePollster m@Metric{..} = do
     sd <- liftIO $ mapToSourceDict $ getSourceMap m
     case sd of
@@ -112,7 +111,7 @@ processBasePollster m@Metric{..} = do
         Nothing -> return []
 
 -- | Constructs the appropriate compound payload and vault data for an event
-processEvent :: (Metric -> IO (Maybe Word64)) -> Metric -> Collector [(Address, SourceDict, TimeStamp, Word64)]
+processEvent :: MonadIO m => (Metric -> IO (Maybe Word64)) -> Metric -> V.Collector o s m [(Address, SourceDict, TimeStamp, Word64)]
 processEvent f m@Metric{..} = do
     p  <- liftIO $ f m
     sd <- liftIO $ mapToSourceDict $ getSourceMap m

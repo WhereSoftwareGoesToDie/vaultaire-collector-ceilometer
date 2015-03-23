@@ -3,6 +3,7 @@
 
 module Vaultaire.Collector.Ceilometer.Process
     ( processSample
+    , process
     , retrieveMessage
     , runCollector
     , initState
@@ -18,6 +19,7 @@ import           Control.Monad.State
 import           Data.Aeson
 import qualified Data.ByteString.Lazy.Char8                      as L
 import           Data.Monoid
+import           Data.Text                                       (Text)
 import qualified Data.Text                                       as T
 import           Data.Word
 import           Options.Applicative                             hiding
@@ -31,6 +33,7 @@ import           Vaultaire.Collector.Common.Process              hiding
 import qualified Vaultaire.Collector.Common.Process              as V (runCollector)
 import           Vaultaire.Collector.Common.Types                hiding
                                                                   (Collector)
+import qualified Vaultaire.Collector.Common.Types                as V (Collector)
 
 import           Vaultaire.Collector.Ceilometer.Process.Common   as Process
 import           Vaultaire.Collector.Ceilometer.Process.Image    as Process
@@ -96,7 +99,7 @@ ackLast = do
 
 -- | Takes in a JSON Object and processes it into a list of
 --   (Address, SourceDict, TimeStamp, Payload) tuples
-processSample :: L.ByteString -> Collector [(Address, SourceDict, TimeStamp, Word64)]
+processSample :: MonadIO m => L.ByteString -> V.Collector o s m [(Address, SourceDict, TimeStamp, Word64)]
 processSample bs =
     case eitherDecode bs of
         Left e  -> do
@@ -107,11 +110,12 @@ processSample bs =
 
 -- | Primary processing function, converts a parsed Ceilometer metric
 --   into a list of vaultaire SimplePoint and SourceDict data
-process :: Metric -> Collector [(Address, SourceDict, TimeStamp, Word64)]
+process :: MonadIO m => Metric -> V.Collector o s m [(Address, SourceDict, TimeStamp, Word64)]
 process m = process' (metricName m) (isEvent m)
   where
 -- Supported metrics
     -- We process both instance pollsters and events
+    process' :: MonadIO m => Text -> Bool -> V.Collector o s m [(Address, SourceDict, TimeStamp, Word64)]
     process' "instance"                   False = processInstancePollster   m
     process' "instance"                   True  = processInstanceEvent      m
     process' "cpu"                        False = processBasePollster       m
