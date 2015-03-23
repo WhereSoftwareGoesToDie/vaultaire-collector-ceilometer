@@ -59,6 +59,7 @@ library
                      -Wall
                      -Wwarn
                      -fwarn-tabs
+                     -fno-spec-constr
 
   ghc-prof-options:  -fprof-auto
 
