@@ -123,7 +123,6 @@ process m = process' (metricName m) (isEvent m)
     process' "disk.read.bytes"            False = processBasePollster       m
     process' "network.incoming.bytes"     False = processBasePollster       m
     process' "network.outgoing.bytes"     False = processBasePollster       m
-    process' "ip.floating"                True  = processIpEvent            m
     process' "volume.size"                True  = processVolumeEvent        m
     -- We process both image.size pollsters and events
     process' "image.size"                 False = processBasePollster       m
@@ -148,8 +147,8 @@ process m = process' (metricName m) (isEvent m)
     -- We meter on bytes not packets
     process' x@"network.incoming.packets"   y       = ignore x y
     process' x@"network.outgoing.packets"   y       = ignore x y
-    -- We use notifications over pollsters for ip-allocations
-    process' x@"ip.floating"                y@False = ignore x y
+    -- ip-allocations are currently unsupported
+    process' x@"ip.floating"                y       = ignore x y
 
     process' x@"ip.floating.create"         y       = ignore x y
     process' x@"ip.floating.update"         y       = ignore x y
