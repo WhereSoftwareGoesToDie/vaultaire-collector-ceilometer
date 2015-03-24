@@ -340,7 +340,7 @@ suite :: Spec
 suite = do
     describe "Processing Supported Metrics" $ do
         it "Processes volume.size events" testVolume
-        it "Processes ip.floating events" testIPFloating
+        it "Processes ip.floating events" $ pendingWith "Floating IPs are currently unsupported"
         it "Processes instance pollsters" testInstancePollster
         it "Processes network rx/tx pollsters" testNetworkRxTx
         it "Processes disk read/write pollsters" testDiskReadWrite
